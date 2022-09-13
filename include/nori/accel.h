@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <set>
 #include <nori/mesh.h>
 
 NORI_NAMESPACE_BEGIN
@@ -28,7 +29,36 @@ NORI_NAMESPACE_BEGIN
  * The current implementation falls back to a brute force loop
  * through the geometry.
  */
-class Accel {
+
+struct Triangle
+{
+    const uint32_t index;
+    const Point3f v0, v1, v2;
+
+    bool operator<(const Triangle &to) const;
+};
+
+class OctreeNode
+{
+public:
+    OctreeNode(BoundingBox3f inputBoundingBox,
+               std::set<Triangle> inputTriangles,
+               std::set<OctreeNode *> inputChildren);
+
+    // bounding box 정보를 저장
+    BoundingBox3f boundingBox;
+    // 자식 노드의 주소를 set으로 저장, leaf node는 children.size() == 0
+    std::set<OctreeNode *> children;
+
+    // 자식 노드를 생성하는 함수
+    void buildChildren();
+
+private:
+    std::set<Triangle> triangles;
+};
+
+class Accel
+{
 public:
     /**
      * \brief Register a triangle mesh for inclusion in the acceleration
@@ -39,7 +69,7 @@ public:
     void addMesh(Mesh *mesh);
 
     /// Build the acceleration data structure (currently a no-op)
-    void build();
+    OctreeNode *build();
 
     /// Return an axis-aligned box that bounds the scene
     const BoundingBox3f &getBoundingBox() const { return m_bbox; }
@@ -66,8 +96,8 @@ public:
     bool rayIntersect(const Ray3f &ray, Intersection &its, bool shadowRay) const;
 
 private:
-    Mesh         *m_mesh = nullptr; ///< Mesh (only a single one for now)
-    BoundingBox3f m_bbox;           ///< Bounding box of the entire scene
+    Mesh *m_mesh = nullptr; ///< Mesh (only a single one for now)
+    BoundingBox3f m_bbox;   ///< Bounding box of the entire scene
 };
 
 NORI_NAMESPACE_END

@@ -25,3 +25,4 @@ rules.ninja
 *.opendb
 Debug
 x64
+/scenes/pa2/ajax.obj
