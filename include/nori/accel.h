@@ -30,31 +30,26 @@ NORI_NAMESPACE_BEGIN
  * through the geometry.
  */
 
-struct Triangle
-{
-    const uint32_t index;
-    const Point3f v0, v1, v2;
-
-    bool operator<(const Triangle &to) const;
-};
-
 class OctreeNode
 {
 public:
-    OctreeNode(BoundingBox3f inputBoundingBox,
-               std::set<Triangle> inputTriangles,
-               std::set<OctreeNode *> inputChildren);
+    OctreeNode(
+        BoundingBox3f *inputBoundingBox,
+        std::set<uint32_t> *inputTriangles);
+
+    // input mesh 저장
+    static Mesh *mesh;
 
     // bounding box 정보를 저장
-    BoundingBox3f boundingBox;
+    BoundingBox3f *boundingBox = nullptr;
+    // boundingBox에 포함되는 삼각형 저장
+    std::set<uint32_t> *triangles = nullptr;
     // 자식 노드의 주소를 set으로 저장, leaf node는 children.size() == 0
-    std::set<OctreeNode *> children;
-
-    // 자식 노드를 생성하는 함수
-    void buildChildren();
+    std::set<OctreeNode *> *children;
 
 private:
-    std::set<Triangle> triangles;
+    // 자식 노드를 생성하는 함수
+    void buildChildren(std::set<uint32_t> *inputTriangles);
 };
 
 class Accel

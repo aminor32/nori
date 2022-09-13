@@ -22,40 +22,37 @@
 
 NORI_NAMESPACE_BEGIN
 
-bool Triangle::operator<(const Triangle &to) const
-{
-    return false;
-}
+Mesh *OctreeNode::mesh = nullptr;
 
-OctreeNode::OctreeNode(BoundingBox3f inputBoundingBox = TBoundingBox<Point3f>(),
-                       std::set<Triangle> inputTriangles = {},
-                       std::set<OctreeNode *> inputChildren = {})
+OctreeNode::OctreeNode(
+    BoundingBox3f *inputBoundingBox = new BoundingBox3f(),
+    std::set<uint32_t> *inputTriangles = nullptr) : children(new std::set<OctreeNode *>)
 {
     boundingBox = inputBoundingBox;
-    triangles = inputTriangles;
-    children = inputChildren;
 
-    buildChildren();
+    buildChildren(inputTriangles);
 };
 
-void OctreeNode::buildChildren()
+void OctreeNode::buildChildren(
+    std::set<uint32_t> *inputTriangles)
 {
-    if (triangles.size() < 10)
+    if (inputTriangles->size() < 10)
     {
-        std::cout << triangles.size() << std::endl;
+        triangles = inputTriangles;
+
         return;
     }
     else
     {
         // min에 대한 max의 방향
         Point3f direction = Point3f(1.0, 1.0, 1.0);
-        Point3f min = boundingBox.min;
-        Point3f mid = boundingBox.getCenter();
+        Point3f min = boundingBox->min;
+        Point3f mid = boundingBox->getCenter();
         // length of sub-bounding box's edge
         float halfEdge = (mid(0, 0) - min(0, 0));
 
         // sub-bounding box에 속하는 triangles를 저장하는 배열
-        std::set<Triangle> childTriangles[8];
+        std::set<uint32_t> childTriangles[8];
         // sub-bounding box의 min을 저장하는 배열
         Point3f mins[8] = {
             min,
@@ -74,29 +71,36 @@ void OctreeNode::buildChildren()
             subBoundingBoxes[i] = BoundingBox3f(mins[i], mins[i] + halfEdge * direction);
         }
 
-        std::set<Triangle>::iterator it;
-        for (it = triangles.begin(); it == triangles.end(); ++it)
+        std::set<uint32_t>::iterator it;
+        for (it = inputTriangles->begin(); it != inputTriangles->end(); ++it)
         {
-            Triangle triangle = *it;
+            const uint32_t idx = *it;
+            const MatrixXu &faces = mesh->getIndices();
+            const MatrixXf &vertices = mesh->getVertexPositions();
+
+            uint32_t i0 = faces(0, idx), i1 = faces(1, idx), i2 = faces(2, idx);
+            Point3f v0 = vertices.col(i0), v1 = vertices.col(i1), v2 = vertices.col(i2);
+
             // construct bounding box of triangle
             BoundingBox3f triBoundingBox = BoundingBox3f();
-            triBoundingBox.expandBy(triangle.v0);
-            triBoundingBox.expandBy(triangle.v1);
-            triBoundingBox.expandBy(triangle.v2);
+            triBoundingBox.expandBy(v0);
+            triBoundingBox.expandBy(v1);
+            triBoundingBox.expandBy(v2);
 
             for (int i = 0; i < 8; ++i)
             {
                 // check bounding box of triangle and sub-bounding box overlaps
                 if (subBoundingBoxes[i].overlaps(triBoundingBox))
                 {
-                    childTriangles[i].insert(triangle);
+                    childTriangles[i].insert(idx);
                 }
             }
         }
 
         for (int i = 0; i < 8; ++i)
         {
-            children.insert(new OctreeNode(subBoundingBoxes[i], childTriangles[i]));
+            std::cout << i << std::endl;
+            children->insert(new OctreeNode(&subBoundingBoxes[i], &childTriangles[i]));
         }
     }
 };
@@ -112,27 +116,17 @@ void Accel::addMesh(Mesh *mesh)
 /* returns reference of root of Octree */
 OctreeNode *Accel::build()
 {
-
+    OctreeNode::mesh = m_mesh;
     BoundingBox3f meshBoundingBox = m_mesh->getBoundingBox();
     uint32_t triangleNum = m_mesh->getTriangleCount();
-    const MatrixXu &faces = m_mesh->getIndices();
-    const MatrixXf &vertices = m_mesh->getVertexPositions();
-    std::set<Triangle> totalTriagles;
+    std::set<uint32_t> totalTriangles;
 
     for (uint32_t i = 0; i < triangleNum; ++i)
     {
-        uint32_t i0 = faces(0, i), i1 = faces(1, i), i2 = faces(2, i);
-        const Point3f v0 = vertices.col(i0), v1 = vertices.col(i1), v2 = vertices.col(i2);
-        const Triangle currentTriangle = {i, v0, v1, v2};
-
-        totalTriagles.insert(currentTriangle);
+        totalTriangles.insert(i);
     }
 
-    std::cout << totalTriagles.size() << std::endl;
-
-    OctreeNode *root = new OctreeNode(meshBoundingBox, totalTriagles);
-
-    return root;
+    return new OctreeNode(&meshBoundingBox, &totalTriangles);
 }
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const
