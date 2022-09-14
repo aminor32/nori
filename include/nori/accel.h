@@ -34,8 +34,8 @@ class OctreeNode
 {
 public:
     OctreeNode(
-        BoundingBox3f *inputBoundingBox,
-        std::set<uint32_t> *inputTriangles);
+        BoundingBox3f *inputBoundingBox = new BoundingBox3f(),
+        std::set<uint32_t> *inputTriangles = nullptr);
 
     // input mesh 저장
     static Mesh *mesh;

@@ -25,8 +25,8 @@ NORI_NAMESPACE_BEGIN
 Mesh *OctreeNode::mesh = nullptr;
 
 OctreeNode::OctreeNode(
-    BoundingBox3f *inputBoundingBox = new BoundingBox3f(),
-    std::set<uint32_t> *inputTriangles = nullptr) : children(new std::set<OctreeNode *>)
+    BoundingBox3f *inputBoundingBox,
+    std::set<uint32_t> *inputTriangles) : children(new std::set<OctreeNode *>)
 {
     boundingBox = inputBoundingBox;
 
@@ -97,10 +97,9 @@ void OctreeNode::buildChildren(
             }
         }
 
-        for (int i = 0; i < 8; ++i)
+        for (int j = 0; j < 8; ++j)
         {
-            std::cout << i << std::endl;
-            children->insert(new OctreeNode(&subBoundingBoxes[i], &childTriangles[i]));
+            children->insert(new OctreeNode(&subBoundingBoxes[j], &childTriangles[j]));
         }
     }
 };
