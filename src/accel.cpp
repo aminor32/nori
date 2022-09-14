@@ -23,6 +23,8 @@
 
 NORI_NAMESPACE_BEGIN
 
+Point3f DIR = Point3f(1.0, 1.0, 1.0);
+
 OctreeNode::OctreeNode(Mesh *inputMesh,
                        uint32_t inputDepth,
                        Point3f *inputMin,
@@ -58,11 +60,9 @@ void OctreeNode::buildChildren(
     else
     {
         Point3f min = *minPoint;
-        // min에 대한 max의 방향
-        Point3f direction = Point3f(1.0, 1.0, 1.0);
         // parent's edge
         float edge = pow(2, -depth);
-        BoundingBox3f boundingBox = BoundingBox3f(min, min + direction * edge);
+        BoundingBox3f boundingBox = BoundingBox3f(min, min + DIR * edge);
 
         // center of bounding box
         Point3f mid = boundingBox.getCenter();
@@ -84,7 +84,7 @@ void OctreeNode::buildChildren(
 
         for (int i = 0; i < 8; ++i)
         {
-            subBoundingBoxes[i] = BoundingBox3f(mins[i], mins[i] + 0.5 * edge * direction);
+            subBoundingBoxes[i] = BoundingBox3f(mins[i], mins[i] + 0.5 * edge * DIR);
         }
 
         std::set<uint32_t>::iterator it;
@@ -129,7 +129,7 @@ void Accel::addMesh(Mesh *mesh)
 }
 
 /* returns reference of root of Octree */
-OctreeNode *Accel::build()
+void Accel::build()
 {
     BoundingBox3f meshBoundingBox = m_mesh->getBoundingBox();
     Point3f min = meshBoundingBox.min;
@@ -141,7 +141,40 @@ OctreeNode *Accel::build()
         totalTriangles.insert(i);
     }
 
-    return new OctreeNode(m_mesh, 0, &min, &totalTriangles);
+    m_root = new OctreeNode(m_mesh, 0, &min, &totalTriangles);
+
+    return;
+}
+
+void Accel::boundingBoxIntersect(OctreeNode *node,
+                                 std::set<OctreeNode *> *intersections,
+                                 const Ray3f &ray,
+                                 bool shadowRay) const
+{
+    float edge = pow(2, -node->depth);
+    Point3f min = *(node->minPoint);
+    BoundingBox3f boundingBox = BoundingBox3f(min, min + DIR * edge);
+
+    bool foundIntersection = boundingBox.rayIntersect(ray);
+
+    if (foundIntersection && node->triangles == nullptr)
+    { // not leaf node
+        std::set<OctreeNode *>::iterator it;
+        for (it = node->children->begin(); it != node->children->end(); ++it)
+        {
+            boundingBoxIntersect(*it, intersections, ray, shadowRay);
+        }
+    }
+    else if (foundIntersection)
+    { // leaf node
+        intersections->insert(node);
+
+        return;
+    }
+    else
+    { // no intersection
+        return;
+    }
 }
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const
@@ -151,22 +184,41 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
 
     Ray3f ray(ray_); /// Make a copy of the ray (we will need to update its '.maxt' value)
 
-    /* Brute force search through all triangles */
-    for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx)
-    {
+    std::set<OctreeNode *> boxIntersections = {};
+
+    // traverse through bounding boxes
+    boundingBoxIntersect(m_root, &boxIntersections, ray_, shadowRay);
+
+    if (boxIntersections.size() > 0)
+    { // ray intersects with box: iterate through triangles in the box
         float u, v, t;
-        if (m_mesh->rayIntersect(idx, ray, u, v, t))
+
+        std::set<OctreeNode *>::iterator boxIt;
+        for (boxIt = boxIntersections.begin(); boxIt != boxIntersections.end(); ++boxIt)
         {
-            /* An intersection was found! Can terminate
-               immediately if this is a shadow ray query */
-            if (shadowRay)
-                return true;
-            ray.maxt = its.t = t;
-            its.uv = Point2f(u, v);
-            its.mesh = m_mesh;
-            f = idx;
-            foundIntersection = true;
+
+            std::set<uint32_t>::iterator triIt;
+            for (triIt = (*boxIt)->triangles->begin(); triIt != (*boxIt)->triangles->end(); ++triIt)
+            {
+                if (m_mesh->rayIntersect(*triIt, ray_, u, v, t))
+                {
+                    if (shadowRay)
+                    {
+                        return true;
+                    }
+
+                    ray.maxt = its.t = t;
+                    its.uv = Point2f(u, v);
+                    its.mesh = m_mesh;
+                    f = *triIt;
+                    foundIntersection = true;
+                }
+            }
         }
+    }
+    else
+    { // ray does not intersect with bounding box: terminate
+        foundIntersection = false;
     }
 
     if (foundIntersection)
