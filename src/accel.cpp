@@ -16,27 +16,40 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <cmath>
 #include <set>
 #include <nori/accel.h>
 #include <Eigen/Geometry>
 
 NORI_NAMESPACE_BEGIN
 
-Mesh *OctreeNode::mesh = nullptr;
-
-OctreeNode::OctreeNode(
-    BoundingBox3f *inputBoundingBox,
-    std::set<uint32_t> *inputTriangles) : children(new std::set<OctreeNode *>)
+OctreeNode::OctreeNode(Mesh *inputMesh,
+                       uint32_t inputDepth,
+                       Point3f *inputMin,
+                       std::set<uint32_t> *inputTriangles) : children(new std::set<OctreeNode *>)
 {
-    boundingBox = inputBoundingBox;
+    mesh = inputMesh;
+    depth = inputDepth;
+    minPoint = inputMin;
 
+    /* if (depth < 100)
+    { */
     buildChildren(inputTriangles);
+    /* }
+    else
+    {
+        triangles = inputTriangles;
+    } */
 };
 
 void OctreeNode::buildChildren(
     std::set<uint32_t> *inputTriangles)
 {
-    if (inputTriangles->size() < 10)
+    if (inputTriangles == nullptr)
+    {
+        return;
+    }
+    else if (inputTriangles->size() < 10)
     {
         triangles = inputTriangles;
 
@@ -44,12 +57,15 @@ void OctreeNode::buildChildren(
     }
     else
     {
+        Point3f min = *minPoint;
         // min에 대한 max의 방향
         Point3f direction = Point3f(1.0, 1.0, 1.0);
-        Point3f min = boundingBox->min;
-        Point3f mid = boundingBox->getCenter();
-        // length of sub-bounding box's edge
-        float halfEdge = (mid(0, 0) - min(0, 0));
+        // parent's edge
+        float edge = pow(2, -depth);
+        BoundingBox3f boundingBox = BoundingBox3f(min, min + direction * edge);
+
+        // center of bounding box
+        Point3f mid = boundingBox.getCenter();
 
         // sub-bounding box에 속하는 triangles를 저장하는 배열
         std::set<uint32_t> childTriangles[8];
@@ -68,7 +84,7 @@ void OctreeNode::buildChildren(
 
         for (int i = 0; i < 8; ++i)
         {
-            subBoundingBoxes[i] = BoundingBox3f(mins[i], mins[i] + halfEdge * direction);
+            subBoundingBoxes[i] = BoundingBox3f(mins[i], mins[i] + 0.5 * edge * direction);
         }
 
         std::set<uint32_t>::iterator it;
@@ -99,7 +115,7 @@ void OctreeNode::buildChildren(
 
         for (int j = 0; j < 8; ++j)
         {
-            children->insert(new OctreeNode(&subBoundingBoxes[j], &childTriangles[j]));
+            children->insert(new OctreeNode(mesh, ++depth, &mins[j], &childTriangles[j]));
         }
     }
 };
@@ -115,8 +131,8 @@ void Accel::addMesh(Mesh *mesh)
 /* returns reference of root of Octree */
 OctreeNode *Accel::build()
 {
-    OctreeNode::mesh = m_mesh;
     BoundingBox3f meshBoundingBox = m_mesh->getBoundingBox();
+    Point3f min = meshBoundingBox.min;
     uint32_t triangleNum = m_mesh->getTriangleCount();
     std::set<uint32_t> totalTriangles;
 
@@ -125,7 +141,7 @@ OctreeNode *Accel::build()
         totalTriangles.insert(i);
     }
 
-    return new OctreeNode(&meshBoundingBox, &totalTriangles);
+    return new OctreeNode(m_mesh, 0, &min, &totalTriangles);
 }
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const
