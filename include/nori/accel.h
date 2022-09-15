@@ -18,8 +18,9 @@
 
 #pragma once
 
-#include <set>
 #include <nori/mesh.h>
+
+#include <set>
 
 NORI_NAMESPACE_BEGIN
 
@@ -30,33 +31,29 @@ NORI_NAMESPACE_BEGIN
  * through the geometry.
  */
 
-class OctreeNode
-{
-public:
-    OctreeNode(Mesh *mesh = nullptr,
-               uint32_t inputDepth = 0,
-               Point3f *inputMin = new Point3f(),
-               std::set<uint32_t> *inputTriangles = nullptr);
+class OctreeNode {
+   public:
+    OctreeNode(Mesh *mesh, uint32_t, Point3f *inputMin,
+               std::set<uint32_t> *inputTriangles);
 
     // input mesh 저장 (root에만)
-    Mesh *mesh = nullptr;
+    Mesh *mesh;
     // depth of node
-    uint32_t depth = 0;
+    uint32_t depth;
     // bounding box 꼭짓점 중 가장 작은 점
-    Point3f *minPoint = nullptr;
+    Point3f *minPoint;
     // boundingBox에 포함되는 삼각형 저장
-    std::set<uint32_t> *triangles = nullptr;
+    std::set<uint32_t> *triangles;
     // 자식 노드의 주소를 set으로 저장, leaf node는 children.size() == 0
     std::set<OctreeNode *> *children;
 
-private:
+   private:
     // 자식 노드를 생성하는 함수
     void buildChildren(std::set<uint32_t> *inputTriangles);
 };
 
-class Accel
-{
-public:
+class Accel {
+   public:
     /**
      * \brief Register a triangle mesh for inclusion in the acceleration
      * data structure
@@ -90,13 +87,15 @@ public:
      *
      * \return \c true if an intersection was found
      */
-    void boundingBoxIntersect(OctreeNode *node, std::set<OctreeNode *> *intersections, const Ray3f &ray, bool shadowRay) const;
-    bool rayIntersect(const Ray3f &ray, Intersection &its, bool shadowRay) const;
+    void boundingBoxIntersect(OctreeNode *node, OctreeNode **intersections,
+                              const Ray3f &ray, bool shadowRay) const;
+    bool rayIntersect(const Ray3f &ray, Intersection &its,
+                      bool shadowRay) const;
 
-private:
-    Mesh *m_mesh = nullptr;       ///< Mesh (only a single one for now)
-    BoundingBox3f m_bbox;         ///< Bounding box of the entire scene
-    OctreeNode *m_root = nullptr; ///< Root of acceleration data model
+   private:
+    Mesh *m_mesh = nullptr;        ///< Mesh (only a single one for now)
+    BoundingBox3f m_bbox;          ///< Bounding box of the entire scene
+    OctreeNode *m_root = nullptr;  ///< Root of acceleration data model
 };
 
 NORI_NAMESPACE_END
