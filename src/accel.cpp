@@ -49,19 +49,31 @@ void OctreeNode::buildChildren(
 {
     if (inputTriangles == nullptr)
     {
+
         return;
     }
     else if (inputTriangles->size() < 10)
     {
+        // std::cout << inputTriangles->size() << std::endl;
         triangles = inputTriangles;
 
         return;
     }
     else
     {
+        BoundingBox3f meshBoundingBox = mesh->getBoundingBox();
         Point3f min = *minPoint;
-        // parent's edge
-        float edge = pow(2, -depth);
+        // parent's edge length
+        float edge = (meshBoundingBox.max(0.0) - meshBoundingBox.min(0, 0)) / pow(2, depth);
+
+        if (edge <= std::numeric_limits<float>::epsilon())
+        {
+            // std::cout << inputTriangles->size() << std::endl;
+            triangles = inputTriangles;
+
+            return;
+        }
+
         BoundingBox3f boundingBox = BoundingBox3f(min, min + DIR * edge);
 
         // center of bounding box
@@ -115,7 +127,7 @@ void OctreeNode::buildChildren(
 
         for (int j = 0; j < 8; ++j)
         {
-            children->insert(new OctreeNode(mesh, ++depth, &mins[j], &childTriangles[j]));
+            children->insert(new OctreeNode(mesh, depth + 1, &mins[j], &childTriangles[j]));
         }
     }
 };
@@ -151,7 +163,8 @@ void Accel::boundingBoxIntersect(OctreeNode *node,
                                  const Ray3f &ray,
                                  bool shadowRay) const
 {
-    float edge = pow(2, -node->depth);
+    BoundingBox3f meshBoundingBox = node->mesh->getBoundingBox();
+    float edge = (meshBoundingBox.max(0.0) - meshBoundingBox.min(0, 0)) / pow(2, node->depth);
     Point3f min = *(node->minPoint);
     BoundingBox3f boundingBox = BoundingBox3f(min, min + DIR * edge);
 
