@@ -36,16 +36,16 @@ class OctreeNode {
     OctreeNode(Mesh *mesh, uint32_t, Point3f *inputMin,
                std::set<uint32_t> *inputTriangles);
 
-    // input mesh 저장 (root에만)
+    // input mesh 저장
     Mesh *mesh;
     // depth of node
     uint32_t depth;
     // bounding box 꼭짓점 중 가장 작은 점
     Point3f *minPoint;
     // boundingBox에 포함되는 삼각형 저장
-    std::set<uint32_t> *triangles;
+    std::set<uint32_t> *triangles = nullptr;
     // 자식 노드의 주소를 set으로 저장, leaf node는 children.size() == 0
-    std::set<OctreeNode *> *children;
+    OctreeNode *children[8] = {nullptr};
 
    private:
     // 자식 노드를 생성하는 함수
@@ -87,7 +87,8 @@ class Accel {
      *
      * \return \c true if an intersection was found
      */
-    void boundingBoxIntersect(OctreeNode *node, OctreeNode **intersections,
+    void boundingBoxIntersect(OctreeNode &node,
+                              const OctreeNode *intersections[30],
                               const Ray3f &ray, bool shadowRay) const;
     bool rayIntersect(const Ray3f &ray, Intersection &its,
                       bool shadowRay) const;
