@@ -128,28 +128,28 @@ void Accel::build() {
     return;
 }
 
-void Accel::boundingBoxIntersect(OctreeNode &node,
+void Accel::boundingBoxIntersect(OctreeNode *node,
                                  const OctreeNode *intersections[30],
                                  const Ray3f &ray, bool shadowRay) const {
     BoundingBox3f meshBoundingBox = m_mesh->getBoundingBox();
     Point3f dir =
-        (meshBoundingBox.max - meshBoundingBox.min) / pow(2, node.depth);
-    Point3f &min = *(node.minPoint);
+        (meshBoundingBox.max - meshBoundingBox.min) / pow(2, node->depth);
+    Point3f &min = *(node->minPoint);
     BoundingBox3f boundingBox = BoundingBox3f(min, min + dir);
 
     bool foundIntersection = boundingBox.rayIntersect(ray);
 
-    if (foundIntersection && node.triangles == nullptr) {
+    if (foundIntersection && node->triangles == nullptr) {
         // not leaf node
         for (int i = 0; i < 8; i++) {
-            boundingBoxIntersect(*(node.children[i]), intersections, ray,
+            boundingBoxIntersect(node->children[i], intersections, ray,
                                  shadowRay);
         }
-    } else if (foundIntersection) {
+    } else if (foundIntersection && node->triangles != nullptr) {
         // leaf node
         for (int i = 0; i < 30; i++) {
             if (intersections[i] == nullptr) {
-                intersections[i] = &node;
+                intersections[i] = node;
 
                 break;
             }
@@ -170,14 +170,20 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its,
     const OctreeNode *boxIntersections[30] = {nullptr};
 
     // traverse through bounding boxes
-    boundingBoxIntersect(*m_root, boxIntersections, ray, shadowRay);
+    boundingBoxIntersect(m_root, boxIntersections, ray, shadowRay);
 
     // ray intersects with box: iterate through triangles in the box
-    if (boxIntersections[0] != nullptr) {
-        for (int i = 0; i < 30; ++i) {
-            std::set<uint32_t> &triangles = *(boxIntersections[i]->triangles);
+    for (int i = 0; i < 30; ++i) {
+        if (boxIntersections[i] == nullptr) {
+            break;
+        }
+
+        std::set<uint32_t> *triangles = boxIntersections[i]->triangles;
+
+        if (triangles->size() > 0) {
             std::set<uint32_t>::iterator triIt;
-            for (triIt = triangles.begin(); triIt != triangles.end(); triIt++) {
+            for (triIt = triangles->begin(); triIt != triangles->end();
+                 triIt++) {
                 float u, v, t;
                 bool triIntersection =
                     m_mesh->rayIntersect(*triIt, ray, u, v, t);
