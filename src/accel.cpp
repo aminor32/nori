@@ -132,84 +132,56 @@ void Accel::build() {
 
     m_root = new OctreeNode(m_mesh, 0, &min, &totalTriangles);
 
+    std::cout << "Octree build complete" << std::endl;
+
     return;
 }
 
-void Accel::boundingBoxIntersect(OctreeNode *node,
-                                 const OctreeNode *intersections[30],
-                                 const Ray3f &ray, bool shadowRay) const {
+void Accel::traverseOctree(OctreeNode *node, Ray3f &ray, Intersection &its,
+                           bool shadowRay, bool &foundIntersection,
+                           uint32_t &f) const {
     // std::cout << node->toString() << std::endl;
-
     BoundingBox3f meshBoundingBox = m_mesh->getBoundingBox();
     Point3f dir = meshBoundingBox.getExtents() / pow(2, node->depth);
     Point3f &min = *(node->minPoint);
     BoundingBox3f boundingBox = BoundingBox3f(min, min + dir);
+    bool boxIntersection = boundingBox.rayIntersect(ray);
 
-    bool foundIntersection = boundingBox.rayIntersect(ray);
-
-    if (foundIntersection && node->triangles == nullptr) {
+    if (boxIntersection && node->triangles == nullptr) {
         // not leaf node
         for (int i = 0; i < 8; i++) {
-            boundingBoxIntersect(node->children[i], intersections, ray,
-                                 shadowRay);
+            traverseOctree(node->children[i], ray, its, shadowRay,
+                           foundIntersection, f);
         }
-    } else if (foundIntersection && node->triangles->size() > 0) {
-        // leaf node
-        for (int i = 0; i < 30; i++) {
-            if (intersections[i] == nullptr) {
-                intersections[i] = node;
+    } else if (boxIntersection && node->triangles->size() > 0) {
+        for (std::vector<uint32_t>::iterator triIt = node->triangles->begin();
+             triIt != node->triangles->end(); triIt++) {
+            float u, v, t;
 
-                break;
+            if (m_mesh->rayIntersect(*triIt, ray, u, v, t)) {
+                ray.maxt = its.t = t;
+                its.uv = Point2f(u, v);
+                its.mesh = m_mesh;
+                f = *triIt;
+                foundIntersection = true;
             }
         }
     }
-
-    return;
 }
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its,
                          bool shadowRay) const {
     bool foundIntersection = false;  // Was an intersection found so far?
     uint32_t f = (uint32_t)-1;  // Triangle index of the closest intersection
-
     Ray3f ray(ray_);  /// Make a copy of the ray (we will need to update its
                       /// '.maxt' value)
 
-    const OctreeNode *boxIntersections[30] = {nullptr};
-
     // traverse through bounding boxes
-    boundingBoxIntersect(m_root, boxIntersections, ray_, shadowRay);
+    traverseOctree(m_root, ray, its, shadowRay, foundIntersection, f);
 
-    // ray intersects with box: iterate through triangles in the box
-    for (int i = 0; i < 30; ++i) {
-        if (boxIntersections[i] == nullptr) {
-            break;
-        }
-
-        if (boxIntersections[i]->triangles->size() > 0) {
-            std::vector<uint32_t>::iterator triIt;
-            for (triIt = boxIntersections[i]->triangles->begin();
-                 triIt != boxIntersections[i]->triangles->end(); triIt++) {
-                float u, v, t;
-                bool triIntersection =
-                    m_mesh->rayIntersect(*triIt, ray, u, v, t);
-
-                if (triIntersection) {
-                    if (shadowRay) {
-                        return true;
-                    }
-
-                    ray.maxt = its.t = t;
-                    its.uv = Point2f(u, v);
-                    its.mesh = m_mesh;
-                    f = *triIt;
-                    foundIntersection = true;
-                }
-            }
-        }
-    }
-
-    if (foundIntersection) {
+    if (foundIntersection && shadowRay) {
+        return true;
+    } else if (foundIntersection) {
         /* At this point, we now know that there is an intersection,
            and we know the triangle index of the closest such intersection.
            The following computes a number of additional properties which

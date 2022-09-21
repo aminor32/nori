@@ -89,9 +89,9 @@ class Accel {
      *
      * \return \c true if an intersection was found
      */
-    void boundingBoxIntersect(OctreeNode *node,
-                              const OctreeNode *intersections[30],
-                              const Ray3f &ray, bool shadowRay) const;
+    void traverseOctree(OctreeNode *node, Ray3f &ray, Intersection &its,
+                        bool shadowRay, bool &foundIntersection,
+                        uint32_t &f) const;
     bool rayIntersect(const Ray3f &ray, Intersection &its,
                       bool shadowRay) const;
 
