@@ -24,88 +24,94 @@
 
 NORI_NAMESPACE_BEGIN
 
-int count = 0;
-
 OctreeNode::OctreeNode(Mesh *inputMesh, uint32_t inputDepth, Point3f *inputMin,
                        std::set<uint32_t> *inputTriangles)
-    : mesh(inputMesh), depth(inputDepth), minPoint(inputMin) {
-    buildChildren(inputTriangles);
-};
-
-void OctreeNode::buildChildren(std::set<uint32_t> *inputTriangles) {
+    : mesh(inputMesh),
+      depth(inputDepth),
+      minPoint(new Point3f((*inputMin)(0, 0), (*inputMin)(1, 0),
+                           (*inputMin)(2, 0))) {
     if (inputTriangles == nullptr) {
         return;
     } else if (inputTriangles->size() < 10) {
         triangles = new std::set<uint32_t>(*inputTriangles);
-        count += triangles->size();
+
         return;
     } else {
-        BoundingBox3f meshBoundingBox = mesh->getBoundingBox();
-        Point3f dir = meshBoundingBox.getExtents() / pow(2, depth);
-        Point3f &min = *minPoint;
-
-        if (std::min({0.5 * dir(0, 0), 0.5 * dir(1, 0), 0.5 * dir(2, 0)}) <=
-            std::numeric_limits<float>::epsilon()) {
-            triangles = new std::set<uint32_t>(*inputTriangles);
-            count += triangles->size();
-
-            return;
-        }
-
-        BoundingBox3f boundingBox = BoundingBox3f(min, min + dir);
-
-        // center of bounding box
-        Point3f mid = boundingBox.getCenter();
-
-        // sub-bounding box의 min을 저장하는 배열
-        Point3f mins[8] = {
-            min,
-            Point3f(min(0, 0), mid(1, 0), min(2, 0)),
-            Point3f(mid(0, 0), mid(1, 0), min(2, 0)),
-            Point3f(mid(0, 0), min(1, 0), min(2, 0)),
-            Point3f(min(0, 0), min(1, 0), mid(2, 0)),
-            Point3f(min(0, 0), mid(1, 0), mid(2, 0)),
-            mid,
-            Point3f(mid(0, 0), min(1, 0), mid(2, 0)),
-        };
-        BoundingBox3f subBoundingBoxes[8];
-
-        for (int i = 0; i < 8; ++i) {
-            subBoundingBoxes[i] = BoundingBox3f(mins[i], mins[i] + 0.5 * dir);
-        }
-
-        // sub-bounding box에 속하는 triangles를 저장하는 배열
-        std::set<uint32_t> childTriangles[8] = {};
-
-        std::set<uint32_t>::iterator it;
-        for (it = inputTriangles->begin(); it != inputTriangles->end(); ++it) {
-            const uint32_t idx = *it;
-            const MatrixXu &faces = mesh->getIndices();
-            const MatrixXf &vertices = mesh->getVertexPositions();
-
-            uint32_t i0 = faces(0, idx), i1 = faces(1, idx), i2 = faces(2, idx);
-            Point3f v0 = vertices.col(i0), v1 = vertices.col(i1),
-                    v2 = vertices.col(i2);
-
-            // construct bounding box of triangle
-            BoundingBox3f triBoundingBox = BoundingBox3f(v0);
-            triBoundingBox.expandBy(v1);
-            triBoundingBox.expandBy(v2);
-
-            for (int i = 0; i < 8; ++i) {
-                // check bounding box of triangle and sub-bounding box overlaps
-                if (subBoundingBoxes[i].overlaps(triBoundingBox)) {
-                    childTriangles[i].insert(idx);
-                }
-            }
-        }
-
-        for (int i = 0; i < 8; ++i) {
-            children[i] =
-                new OctreeNode(mesh, depth + 1, &mins[i], &childTriangles[i]);
-        }
+        buildChildren(inputTriangles);
     }
 };
+
+void OctreeNode::buildChildren(std::set<uint32_t> *inputTriangles) {
+    BoundingBox3f meshBoundingBox = mesh->getBoundingBox();
+    Point3f dir = meshBoundingBox.getExtents() / pow(2, depth);
+    Point3f &min = *minPoint;
+
+    if (std::min({0.5 * dir(0, 0), 0.5 * dir(1, 0), 0.5 * dir(2, 0)}) <=
+        std::numeric_limits<float>::epsilon()) {
+        triangles = new std::set<uint32_t>(*inputTriangles);
+
+        return;
+    }
+
+    BoundingBox3f boundingBox = BoundingBox3f(min, min + dir);
+
+    // center of bounding box
+    Point3f mid = boundingBox.getCenter();
+
+    // sub-bounding box의 min을 저장하는 배열
+    Point3f mins[8] = {
+        min,
+        Point3f(min(0, 0), mid(1, 0), min(2, 0)),
+        Point3f(mid(0, 0), mid(1, 0), min(2, 0)),
+        Point3f(mid(0, 0), min(1, 0), min(2, 0)),
+        Point3f(min(0, 0), min(1, 0), mid(2, 0)),
+        Point3f(min(0, 0), mid(1, 0), mid(2, 0)),
+        mid,
+        Point3f(mid(0, 0), min(1, 0), mid(2, 0)),
+    };
+    BoundingBox3f subBoundingBoxes[8];
+
+    for (int i = 0; i < 8; ++i) {
+        subBoundingBoxes[i] = BoundingBox3f(mins[i], mins[i] + 0.5 * dir);
+    }
+
+    // sub-bounding box에 속하는 triangles를 저장하는 배열
+    std::set<uint32_t> childTriangles[8] = {};
+
+    std::set<uint32_t>::iterator it;
+    for (it = inputTriangles->begin(); it != inputTriangles->end(); ++it) {
+        const uint32_t idx = *it;
+        const MatrixXu &faces = mesh->getIndices();
+        const MatrixXf &vertices = mesh->getVertexPositions();
+
+        uint32_t i0 = faces(0, idx), i1 = faces(1, idx), i2 = faces(2, idx);
+        Point3f v0 = vertices.col(i0), v1 = vertices.col(i1),
+                v2 = vertices.col(i2);
+
+        // construct bounding box of triangle
+        BoundingBox3f triBoundingBox = BoundingBox3f(v0);
+        triBoundingBox.expandBy(v1);
+        triBoundingBox.expandBy(v2);
+
+        for (int i = 0; i < 8; ++i) {
+            // check bounding box of triangle and sub-bounding box overlaps
+            if (subBoundingBoxes[i].overlaps(triBoundingBox)) {
+                childTriangles[i].insert(idx);
+            }
+        }
+    }
+
+    for (int i = 0; i < 8; ++i) {
+        children[i] =
+            new OctreeNode(mesh, depth + 1, &mins[i], &childTriangles[i]);
+    }
+};
+
+std::string OctreeNode::toString() {
+    return tfm::format("OctreeNode: depth=%d, minPoint=%s, trianglesNum=%d",
+                       depth, minPoint->toString(),
+                       triangles && triangles->size());
+}
 
 void Accel::addMesh(Mesh *mesh) {
     if (m_mesh) throw NoriException("Accel: only a single mesh is supported!");
@@ -125,13 +131,15 @@ void Accel::build() {
     }
 
     m_root = new OctreeNode(m_mesh, 0, &min, &totalTriangles);
-    std::cout << count << std::endl;
+
     return;
 }
 
 void Accel::boundingBoxIntersect(OctreeNode *node,
                                  const OctreeNode *intersections[30],
                                  const Ray3f &ray, bool shadowRay) const {
+    std::cout << node->toString() << std::endl;
+
     BoundingBox3f meshBoundingBox = m_mesh->getBoundingBox();
     Point3f dir = meshBoundingBox.getExtents() / pow(2, node->depth);
     Point3f &min = *(node->minPoint);

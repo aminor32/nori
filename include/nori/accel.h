@@ -47,6 +47,8 @@ class OctreeNode {
     // 자식 노드의 주소를 set으로 저장, leaf node는 children.size() == 0
     OctreeNode *children[8] = {nullptr};
 
+    std::string toString();
+
    private:
     // 자식 노드를 생성하는 함수
     void buildChildren(std::set<uint32_t> *inputTriangles);
