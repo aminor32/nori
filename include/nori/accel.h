@@ -20,7 +20,8 @@
 
 #include <nori/mesh.h>
 
-#include <set>
+#include <array>
+#include <vector>
 
 NORI_NAMESPACE_BEGIN
 
@@ -44,8 +45,8 @@ class OctreeNode {
     Point3f *minPoint;
     // boundingBox에 포함되는 삼각형 저장
     std::vector<uint32_t> *triangles = nullptr;
-    // 자식 노드의 주소를 set으로 저장, leaf node는 children.size() == 0
-    OctreeNode *children[8] = {nullptr};
+    // 자식 노드의 주소를 array로 저장, leaf node는 children.size() == 0
+    std::array<OctreeNode *, 8> children = {nullptr};
 
     std::string toString();
 
