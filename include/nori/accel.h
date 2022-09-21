@@ -34,7 +34,7 @@ NORI_NAMESPACE_BEGIN
 class OctreeNode {
    public:
     OctreeNode(Mesh *mesh, uint32_t, Point3f *inputMin,
-               std::set<uint32_t> *inputTriangles);
+               std::vector<uint32_t> *inputTriangles);
 
     // input mesh 저장
     Mesh *mesh;
@@ -43,7 +43,7 @@ class OctreeNode {
     // bounding box 꼭짓점 중 가장 작은 점
     Point3f *minPoint;
     // boundingBox에 포함되는 삼각형 저장
-    std::set<uint32_t> *triangles = nullptr;
+    std::vector<uint32_t> *triangles = nullptr;
     // 자식 노드의 주소를 set으로 저장, leaf node는 children.size() == 0
     OctreeNode *children[8] = {nullptr};
 
@@ -51,7 +51,7 @@ class OctreeNode {
 
    private:
     // 자식 노드를 생성하는 함수
-    void buildChildren(std::set<uint32_t> *inputTriangles);
+    void buildChildren(std::vector<uint32_t> *inputTriangles);
 };
 
 class Accel {
