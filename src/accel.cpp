@@ -21,6 +21,7 @@
 #include <Eigen/Geometry>
 #include <algorithm>
 #include <cmath>
+#include <ctime>
 #include <vector>
 
 NORI_NAMESPACE_BEGIN
@@ -131,9 +132,11 @@ void Accel::build() {
         totalTriangles.push_back(i);
     }
 
+    float start = clock();
     m_root = new OctreeNode(m_mesh, 0, &min, &totalTriangles);
+    float end = clock();
 
-    std::cout << "Octree build complete" << std::endl;
+    std::cout << "Octree build done in" << start - end << "ms" << std::endl;
 
     return;
 }
@@ -141,8 +144,6 @@ void Accel::build() {
 void Accel::traverseOctree(OctreeNode *node, Ray3f &ray, Intersection &its,
                            bool shadowRay, bool &foundIntersection,
                            uint32_t &f) const {
-    const std::array<OctreeNode *, 8> &children = node->children;
-
     BoundingBox3f meshBoundingBox = m_mesh->getBoundingBox();
     Point3f dir = meshBoundingBox.getExtents();
     Point3f &min = *(node->minPoint);
@@ -151,6 +152,8 @@ void Accel::traverseOctree(OctreeNode *node, Ray3f &ray, Intersection &its,
     bool boxIntersection = boundingBox.rayIntersect(ray);
 
     if (boxIntersection && node->triangles == nullptr) {
+        std::array<OctreeNode *, 8> &children = node->children;
+
         std::sort(children.begin(), children.end(),
                   [&ray, &dir](OctreeNode *node1, OctreeNode *node2) {
                       Point3f &min1 = *(node1->minPoint);
@@ -159,22 +162,22 @@ void Accel::traverseOctree(OctreeNode *node, Ray3f &ray, Intersection &its,
                           min1, min1 + dir / pow(2, node1->depth));
                       BoundingBox3f box2 = BoundingBox3f(
                           min2, min2 + dir / pow(2, node2->depth));
-                      float d1 = box1.distanceTo(ray.o);
-                      float d2 = box2.distanceTo(ray.o);
 
-                      return d1 < d2;
+                      return box1.distanceTo(ray.o) < box2.distanceTo(ray.o);
                   });
 
         // not leaf node
-        std::array<OctreeNode *, 8>::const_iterator boxIt;
-        for (boxIt = children.begin(); boxIt != children.end(); boxIt++) {
-            Point3f &min = *(node->minPoint);
-            BoundingBox3f box =
-                BoundingBox3f(min, min + dir / pow(2, node->depth));
-            std::cout << box.distanceTo(ray.o) << std::endl;
-            ;
+        std::array<OctreeNode *, 8>::const_iterator childIt;
+        for (childIt = children.begin(); childIt != children.end(); childIt++) {
+            Point3f &min = *((*childIt)->minPoint);
+            BoundingBox3f childBox =
+                BoundingBox3f(min, min + dir / pow(2, node->depth + 1));
 
-            traverseOctree(*boxIt, ray, its, shadowRay, foundIntersection, f);
+            if (childBox.distanceTo(ray.o) > ray.maxt) {
+                break;
+            }
+
+            traverseOctree(*childIt, ray, its, shadowRay, foundIntersection, f);
         }
     } else if (boxIntersection && node->triangles->size() > 0) {
         for (std::vector<uint32_t>::const_iterator triIt =
@@ -209,7 +212,8 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its,
         /* At this point, we now know that there is an intersection,
            and we know the triangle index of the closest such intersection.
            The following computes a number of additional properties which
-           characterize the intersection (normals, texture coordinates, etc..)
+           characterize the intersection (normals, texture coordinates,
+           etc..)
         */
 
         /* Find the barycentric coordinates */
