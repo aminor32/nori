@@ -34,6 +34,11 @@ OctreeNode::OctreeNode(Mesh *inputMesh, uint32_t inputDepth, Point3f *inputMin,
                            (*inputMin)(2, 0))) {
     if (inputTriangles == nullptr) {
         return;
+    }
+    if (inputDepth > 15) {
+        triangles = new std::vector<uint32_t>(*inputTriangles);
+
+        return;
     } else if (inputTriangles->size() < 10) {
         triangles = new std::vector<uint32_t>(*inputTriangles);
 
