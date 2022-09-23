@@ -52,7 +52,7 @@ float Warp::tentCdfInverse(const float &t) {
 }
 
 Point2f Warp::squareToTent(const Point2f &sample) {
-    return Point2f(tentCdfInverse(sample.x()), tentCdfInverse(sample.y()))
+    return Point2f(tentCdfInverse(sample.x()), tentCdfInverse(sample.y()));
 }
 
 float Warp::squareToTentPdf(const Point2f &p) {
@@ -81,7 +81,7 @@ Vector3f Warp::squareToUniformHemisphere(const Point2f &sample) {
     const float &x = sample.x(), &y = sample.y();
 
     return Vector3f(std::sqrt(1 - x * x) * std::cos(2 * M_PI * y),
-                    std::sqrt(1 - x * x) * std::sin(2 * M_PI * y), x)
+                    std::sqrt(1 - x * x) * std::sin(2 * M_PI * y), x);
 }
 
 float Warp::squareToUniformHemispherePdf(const Vector3f &v) {
@@ -89,9 +89,9 @@ float Warp::squareToUniformHemispherePdf(const Vector3f &v) {
 }
 
 Vector3f Warp::squareToCosineHemisphere(const Point2f &sample) {
-    Point2f d = squaretoUniformDisk(sample);
+    Point2f d = squareToUniformDisk(sample);
 
-    return Vector3f(d.x(), d.y(), std::sqrt(1 - d.x() * d.x() - d.y() * d.y()))
+    return Vector3f(d.x(), d.y(), std::sqrt(1 - d.x() * d.x() - d.y() * d.y()));
 }
 
 float Warp::squareToCosineHemispherePdf(const Vector3f &v) {
