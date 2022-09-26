@@ -34,10 +34,8 @@ float Warp::squareToUniformSquarePdf(const Point2f &sample) {
 float Warp::tentPdf(const float &t) {
     if (t < -1 || 1 < t) {
         return 0;
-    } else if (-1 <= t && t < 0) {
-        return 1 + t;
     } else {
-        return 1 - t;
+        return 1 - std::abs(t);
     }
 }
 
@@ -60,10 +58,32 @@ float Warp::squareToTentPdf(const Point2f &p) {
 }
 
 Point2f Warp::squareToUniformDisk(const Point2f &sample) {
-    return Point2f(std::sqrt(sample.x()), 2 * M_PI * sample.y());
+    Point2f v = 2 * sample - Point2f(1.f, 1.f);
+    float r, theta;
+
+    /* if (v.x() == 0 && v.y() == 0) {
+        return Point2f();
+    } else if (std::abs(v.x()) > std::abs(v.y())) {
+        r = v.x();
+        theta = (M_PI / 4) * (v.y() / v.x());
+    } else {
+        r = v.y();
+        theta = M_PI / 2 - (M_PI / 4) * (v.x() / v.y());
+    } */
+
+    r = std::sqrt(sample.x());
+    theta = 2 * M_PI * sample.y();
+
+    return r * Point2f(std::cos(theta), std::sin(theta));
 }
 
-float Warp::squareToUniformDiskPdf(const Point2f &p) { return 1 / M_PI; }
+float Warp::squareToUniformDiskPdf(const Point2f &p) {
+    if (std::sqrt(p.dot(p)) > 1) {
+        return 0;
+    } else {
+        return 1 / M_PI;
+    }
+}
 
 Vector3f Warp::squareToUniformSphere(const Point2f &sample) {
     const float &x = sample.x(), &y = sample.y();
@@ -85,7 +105,11 @@ Vector3f Warp::squareToUniformHemisphere(const Point2f &sample) {
 }
 
 float Warp::squareToUniformHemispherePdf(const Vector3f &v) {
-    return 1 / (2 * M_PI);
+    if (v.z() > 0) {
+        return 1 / (2 * M_PI);
+    } else {
+        return 0;
+    }
 }
 
 Vector3f Warp::squareToCosineHemisphere(const Point2f &sample) {
@@ -95,7 +119,11 @@ Vector3f Warp::squareToCosineHemisphere(const Point2f &sample) {
 }
 
 float Warp::squareToCosineHemispherePdf(const Vector3f &v) {
-    return v.z() / M_PI;
+    if (v.z() > 0) {
+        return v.z() / M_PI;
+    } else {
+        return 0;
+    }
 }
 
 Vector3f Warp::squareToBeckmann(const Point2f &sample, float alpha) {
