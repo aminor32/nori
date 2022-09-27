@@ -16,19 +16,20 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <nori/parser.h>
-#include <nori/scene.h>
-#include <nori/camera.h>
-#include <nori/block.h>
-#include <nori/timer.h>
-#include <nori/bitmap.h>
-#include <nori/sampler.h>
-#include <nori/integrator.h>
-#include <nori/gui.h>
-#include <tbb/parallel_for.h>
-#include <tbb/blocked_range.h>
-#include <tbb/task_scheduler_init.h>
 #include <filesystem/resolver.h>
+#include <nori/bitmap.h>
+#include <nori/block.h>
+#include <nori/camera.h>
+#include <nori/gui.h>
+#include <nori/integrator.h>
+#include <nori/parser.h>
+#include <nori/sampler.h>
+#include <nori/scene.h>
+#include <nori/timer.h>
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
+#include <tbb/task_scheduler_init.h>
+
 #include <thread>
 
 using namespace nori;
@@ -36,26 +37,31 @@ using namespace nori;
 static int threadCount = -1;
 static bool gui = true;
 
-static void renderBlock(const Scene *scene, Sampler *sampler, ImageBlock &block) {
+static void renderBlock(const Scene *scene, Sampler *sampler,
+                        ImageBlock &block) {
     const Camera *camera = scene->getCamera();
     const Integrator *integrator = scene->getIntegrator();
 
     Point2i offset = block.getOffset();
-    Vector2i size  = block.getSize();
+    Vector2i size = block.getSize();
 
     /* Clear the block contents */
     block.clear();
 
     /* For each pixel and pixel sample sample */
-    for (int y=0; y<size.y(); ++y) {
-        for (int x=0; x<size.x(); ++x) {
-            for (uint32_t i=0; i<sampler->getSampleCount(); ++i) {
-                Point2f pixelSample = Point2f((float) (x + offset.x()), (float) (y + offset.y())) + sampler->next2D();
+    for (int y = 0; y < size.y(); ++y) {
+        for (int x = 0; x < size.x(); ++x) {
+            // for (uint32_t i=0; i<sampler->getSampleCount(); ++i) {
+            for (uint32_t i = 0; i < 1; ++i) {
+                Point2f pixelSample =
+                    Point2f((float)(x + offset.x()), (float)(y + offset.y())) +
+                    sampler->next2D();
                 Point2f apertureSample = sampler->next2D();
 
                 /* Sample a ray from the camera */
                 Ray3f ray;
-                Color3f value = camera->sampleRay(ray, pixelSample, apertureSample);
+                Color3f value =
+                    camera->sampleRay(ray, pixelSample, apertureSample);
 
                 /* Compute the incident radiance */
                 value *= integrator->Li(scene, sampler, ray);
@@ -100,12 +106,12 @@ static void render(Scene *scene, const std::string &filename) {
             /* Allocate memory for a small image block to be rendered
                by the current thread */
             ImageBlock block(Vector2i(NORI_BLOCK_SIZE),
-                camera->getReconstructionFilter());
+                             camera->getReconstructionFilter());
 
             /* Create a clone of the sampler for the current thread */
             std::unique_ptr<Sampler> sampler(scene->getSampler()->clone());
 
-            for (int i=range.begin(); i<range.end(); ++i) {
+            for (int i = range.begin(); i < range.end(); ++i) {
                 /* Request an image block from the block generator */
                 blockGenerator.next(block);
 
@@ -131,8 +137,7 @@ static void render(Scene *scene, const std::string &filename) {
     });
 
     /* Enter the application main loop */
-    if (gui)
-        nanogui::mainloop(50.f);
+    if (gui) nanogui::mainloop(50.f);
 
     /* Shut down the user interface */
     render_thread.join();
@@ -161,7 +166,8 @@ static void render(Scene *scene, const std::string &filename) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        cerr << "Syntax: " << argv[0] << " <scene.xml> [--no-gui] [--threads N]" <<  endl;
+        cerr << "Syntax: " << argv[0] << " <scene.xml> [--no-gui] [--threads N]"
+             << endl;
         return -1;
     }
 
@@ -171,20 +177,23 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         std::string token(argv[i]);
         if (token == "-t" || token == "--threads") {
-            if (i+1 >= argc) {
-                cerr << "\"--threads\" argument expects a positive integer following it." << endl;
+            if (i + 1 >= argc) {
+                cerr << "\"--threads\" argument expects a positive integer "
+                        "following it."
+                     << endl;
                 return -1;
             }
-            threadCount = atoi(argv[i+1]);
+            threadCount = atoi(argv[i + 1]);
             i++;
             if (threadCount <= 0) {
-                cerr << "\"--threads\" argument expects a positive integer following it." << endl;
+                cerr << "\"--threads\" argument expects a positive integer "
+                        "following it."
+                     << endl;
                 return -1;
             }
 
             continue;
-        }
-        else if (token == "--no-gui") {
+        } else if (token == "--no-gui") {
             gui = false;
             continue;
         }
@@ -204,7 +213,8 @@ int main(int argc, char **argv) {
                 exrName = argv[i];
             } else {
                 cerr << "Fatal error: unknown file \"" << argv[i]
-                     << "\", expected an extension of type .xml or .exr" << endl;
+                     << "\", expected an extension of type .xml or .exr"
+                     << endl;
             }
         } catch (const std::exception &e) {
             cerr << "Fatal error: " << e.what() << endl;
@@ -212,22 +222,25 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (exrName !="" && sceneName !="") {
-        cerr << "Both .xml and .exr files were provided. Please only provide one of them." << endl;
+    if (exrName != "" && sceneName != "") {
+        cerr << "Both .xml and .exr files were provided. Please only provide "
+                "one of them."
+             << endl;
         return -1;
-    }
-    else if (exrName == "" && sceneName == "") {
+    } else if (exrName == "" && sceneName == "") {
         cerr << "Please provide the path to a .xml (or .exr) file." << endl;
         return -1;
-    }
-    else if (exrName != "") {
+    } else if (exrName != "") {
         if (!gui) {
-            cerr << "Flag --no-gui was set. Please remove it to display the EXR file." << endl;
+            cerr << "Flag --no-gui was set. Please remove it to display the "
+                    "EXR file."
+                 << endl;
             return -1;
         }
         try {
             Bitmap bitmap(exrName);
-            ImageBlock block(Vector2i((int) bitmap.cols(), (int) bitmap.rows()), nullptr);
+            ImageBlock block(Vector2i((int)bitmap.cols(), (int)bitmap.rows()),
+                             nullptr);
             block.fromBitmap(bitmap);
             nanogui::init();
             NoriScreen *screen = new NoriScreen(block);
@@ -238,8 +251,7 @@ int main(int argc, char **argv) {
             cerr << e.what() << endl;
             return -1;
         }
-    }
-    else { // sceneName != ""
+    } else {  // sceneName != ""
         if (threadCount < 0) {
             threadCount = tbb::task_scheduler_init::automatic;
         }

@@ -196,6 +196,10 @@ void Accel::traverseOctree(OctreeNode *node, Ray3f &ray, Intersection &its,
                 its.mesh = m_mesh;
                 f = *triIt;
                 foundIntersection = true;
+
+                if (shadowRay) {
+                    break;
+                }
             }
         }
     }
@@ -211,9 +215,7 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its,
     // traverse through bounding boxes
     traverseOctree(m_root, ray, its, shadowRay, foundIntersection, f);
 
-    if (foundIntersection && shadowRay) {
-        return true;
-    } else if (foundIntersection) {
+    if (foundIntersection) {
         /* At this point, we now know that there is an intersection,
            and we know the triangle index of the closest such intersection.
            The following computes a number of additional properties which

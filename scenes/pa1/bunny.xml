@@ -5,7 +5,11 @@
 	</sampler>
 
     <!-- Render the visible surface normals -->
-    <integrator type="normals"/>
+    <!-- <integrator type="normals"/> -->
+	<integrator type="simple">
+        <point name="position" value="-20, 40, 20"/>
+        <color name="energy" value="3.76e4, 3.76e4, 3.76e4"/>
+    </integrator>
 
     <!-- Load the Stanford bunny (https://graphics.stanford.edu/data/3Dscanrep/) -->
 	<mesh type="obj">
