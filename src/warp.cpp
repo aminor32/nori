@@ -58,7 +58,7 @@ float Warp::squareToTentPdf(const Point2f &p) {
 }
 
 Point2f Warp::squareToUniformDisk(const Point2f &sample) {
-    Point2f v = 2 * sample - Point2f(1.f, 1.f);
+    // Point2f v = 2 * sample - Point2f(1.f, 1.f);
     float r, theta;
 
     /* if (v.x() == 0 && v.y() == 0) {
@@ -127,11 +127,24 @@ float Warp::squareToCosineHemispherePdf(const Vector3f &v) {
 }
 
 Vector3f Warp::squareToBeckmann(const Point2f &sample, float alpha) {
-    throw NoriException("Warp::squareToBeckmann() is not yet implemented!");
+    float pi = 2 * M_PI * sample.x();
+    float theta = std::atan(std::sqrt(-alpha * alpha * std::log(sample.y())));
+
+    return Vector3f(std::sin(theta) * std::cos(pi),
+                    std::sin(theta) * std::sin(pi), std::cos(theta));
 }
 
 float Warp::squareToBeckmannPdf(const Vector3f &m, float alpha) {
-    throw NoriException("Warp::squareToBeckmannPdf() is not yet implemented!");
+    float alpha2 = alpha * alpha;
+    float tanTheta2 = (m.x() * m.x() + m.y() * m.y()) / (m.z() * m.z());
+    float cosTheta3 = m.z() * m.z() * m.z();
+
+    if (m.z() <= 0) {
+        return 0;
+    } else {
+        return (1 / (2 * M_PI)) * (2 * std::exp(-tanTheta2 / alpha2)) /
+               (alpha2 * cosTheta3);
+    }
 }
 
 NORI_NAMESPACE_END
