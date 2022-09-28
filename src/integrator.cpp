@@ -1,8 +1,11 @@
+#include <nori/frame.h>
 #include <nori/integrator.h>
 #include <nori/scene.h>
+#include <nori/warp.h>
 
 #include <algorithm>
 #include <cmath>
+#include <random>
 
 NORI_NAMESPACE_BEGIN
 
@@ -60,7 +63,7 @@ class SimpleIntegrator : public Integrator {
                 return Color3f(0, 0, 1);
             }
 
-            Color3f l = (lightEnergy / (4 * M_PI * M_PI)) *
+            Color3f l = (lightEnergy * INV_FOURPI / M_PI) *
                         (std::max<float>(0, cosTheta) / dir.squaredNorm()) * v;
 
             return l;
@@ -74,6 +77,51 @@ class SimpleIntegrator : public Integrator {
     Color3f lightEnergy;
 };
 
+// Ambient Occlusion Integrator
+class AOIntegrator : public Integrator {
+   public:
+    AOIntegrator(const PropertyList &props) {
+        // no properties needed
+    }
+
+    Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
+        Intersection its;
+
+        if (!scene->rayIntersect(ray, its)) {
+            return Color3f();
+        } else {
+            // position of intersection point
+            const Point3f &x = its.p;
+
+            // set number of samples
+            int sampleNum = 20;
+            float l = 0;
+
+            for (int i = 0; i < sampleNum; i++) {
+                Vector3f sample =
+                    Warp::squareToCosineHemisphere(sampler->next2D());
+                Vector3f w = its.toWorld(sample);
+                float cosTheta = its.shFrame.cosTheta(w - x);
+
+                Ray3f shadowRay = Ray3f(x, w);
+                Intersection shadowIts;
+
+                if (!scene->getAccel()->rayIntersect(shadowRay, shadowIts,
+                                                     true)) {
+                    l += INV_PI * std::max<float>(0, cosTheta);
+                }
+            }
+
+            std::cout << l << std::endl;
+
+            return Color3f(l);
+        }
+    }
+
+    std::string toString() const { return "AmbientOcclusionIntegrator[]"; }
+};
+
 NORI_REGISTER_CLASS(NormalIntegrator, "normals");
 NORI_REGISTER_CLASS(SimpleIntegrator, "simple");
+NORI_REGISTER_CLASS(AOIntegrator, "ao");
 NORI_NAMESPACE_END
