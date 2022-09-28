@@ -44,18 +44,20 @@ class SimpleIntegrator : public Integrator {
             // position of intersection point
             const Point3f &x = its.p;
             // direction of light toward intersection point
-            Vector3f dir = x - lightPosition;
+            Vector3f dir = lightPosition - x;
             // square of distance between ray origin and intersection point
-            float cosTheta = n.dot((-1) * dir) / (n.norm() * dir.norm());
-            float v = 0;
+            float cosTheta = n.dot(dir) / (n.norm() * dir.norm());
 
             Ray3f shadowRay =
-                Ray3f(lightPosition, dir, 0,
-                      dir.norm() - std::numeric_limits<float>::epsilon());
+                Ray3f(lightPosition, dir.normalized(),
+                      std::numeric_limits<float>::epsilon(), dir.norm());
             Intersection shadowIts;
+            int v = scene->getAccel()->rayIntersect(shadowRay, shadowIts, true)
+                        ? 0
+                        : 1;
 
-            if (!scene->getAccel()->rayIntersect(shadowRay, shadowIts, true)) {
-                v = 1;
+            if (v == 0) {
+                return Color3f(0, 0, 1);
             }
 
             Color3f l = (lightEnergy / (4 * M_PI * M_PI)) *
