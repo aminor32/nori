@@ -198,7 +198,7 @@ void Accel::traverseOctree(OctreeNode *node, Ray3f &ray, Intersection &its,
                 foundIntersection = true;
 
                 if (shadowRay) {
-                    break;
+                    return;
                 }
             }
         }
