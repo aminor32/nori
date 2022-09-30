@@ -30,8 +30,7 @@ OctreeNode::OctreeNode(Mesh *inputMesh, uint32_t inputDepth, Point3f *inputMin,
                        std::vector<uint32_t> *inputTriangles)
     : mesh(inputMesh),
       depth(inputDepth),
-      minPoint(new Point3f((*inputMin)(0, 0), (*inputMin)(1, 0),
-                           (*inputMin)(2, 0))) {
+      minPoint(new Point3f((*inputMin).x(), (*inputMin).y(), (*inputMin).z())) {
     if (inputTriangles == nullptr) {
         return;
     }
@@ -44,73 +43,69 @@ OctreeNode::OctreeNode(Mesh *inputMesh, uint32_t inputDepth, Point3f *inputMin,
 
         return;
     } else {
-        buildChildren(inputTriangles);
-    }
-};
+        BoundingBox3f meshBoundingBox = mesh->getBoundingBox();
+        Point3f dir = meshBoundingBox.getExtents() / pow(2, depth);
+        Point3f &min = *minPoint;
 
-void OctreeNode::buildChildren(std::vector<uint32_t> *inputTriangles) {
-    BoundingBox3f meshBoundingBox = mesh->getBoundingBox();
-    Point3f dir = meshBoundingBox.getExtents() / pow(2, depth);
-    Point3f &min = *minPoint;
+        if (std::min({0.5 * dir.x(), 0.5 * dir.y(), 0.5 * dir.z()}) <=
+            std::numeric_limits<float>::epsilon()) {
+            triangles = new std::vector<uint32_t>(*inputTriangles);
 
-    if (std::min({0.5 * dir(0, 0), 0.5 * dir(1, 0), 0.5 * dir(2, 0)}) <=
-        std::numeric_limits<float>::epsilon()) {
-        triangles = new std::vector<uint32_t>(*inputTriangles);
+            return;
+        }
 
-        return;
-    }
+        BoundingBox3f boundingBox = BoundingBox3f(min, min + dir);
 
-    BoundingBox3f boundingBox = BoundingBox3f(min, min + dir);
+        // center of bounding box
+        Point3f mid = boundingBox.getCenter();
 
-    // center of bounding box
-    Point3f mid = boundingBox.getCenter();
-
-    // sub-bounding box의 min을 저장하는 배열
-    Point3f mins[8] = {
-        min,
-        Point3f(min(0, 0), mid(1, 0), min(2, 0)),
-        Point3f(mid(0, 0), mid(1, 0), min(2, 0)),
-        Point3f(mid(0, 0), min(1, 0), min(2, 0)),
-        Point3f(min(0, 0), min(1, 0), mid(2, 0)),
-        Point3f(min(0, 0), mid(1, 0), mid(2, 0)),
-        mid,
-        Point3f(mid(0, 0), min(1, 0), mid(2, 0)),
-    };
-    BoundingBox3f subBoundingBoxes[8];
-
-    for (int i = 0; i < 8; ++i) {
-        subBoundingBoxes[i] = BoundingBox3f(mins[i], mins[i] + 0.5 * dir);
-    }
-
-    // sub-bounding box에 속하는 triangles를 저장하는 배열
-    std::array<std::vector<uint32_t>, 8> childTriangles = {};
-
-    std::vector<uint32_t>::iterator it;
-    for (it = inputTriangles->begin(); it != inputTriangles->end(); ++it) {
-        const uint32_t idx = *it;
-        const MatrixXu &faces = mesh->getIndices();
-        const MatrixXf &vertices = mesh->getVertexPositions();
-
-        uint32_t i0 = faces(0, idx), i1 = faces(1, idx), i2 = faces(2, idx);
-        Point3f v0 = vertices.col(i0), v1 = vertices.col(i1),
-                v2 = vertices.col(i2);
-
-        // construct bounding box of triangle
-        BoundingBox3f triBoundingBox = BoundingBox3f(v0);
-        triBoundingBox.expandBy(v1);
-        triBoundingBox.expandBy(v2);
+        // sub-bounding box의 min을 저장하는 배열
+        Point3f mins[8] = {
+            min,
+            Point3f(min.x(), mid.y(), min.z()),
+            Point3f(mid.x(), mid.y(), min.z()),
+            Point3f(mid.x(), min.y(), min.z()),
+            Point3f(min.x(), min.y(), mid.z()),
+            Point3f(min.x(), mid.y(), mid.z()),
+            mid,
+            Point3f(mid.x(), min.y(), mid.z()),
+        };
+        BoundingBox3f subBoundingBoxes[8];
 
         for (int i = 0; i < 8; ++i) {
-            // check bounding box of triangle and sub-bounding box overlaps
-            if (subBoundingBoxes[i].overlaps(triBoundingBox)) {
-                childTriangles[i].push_back(idx);
+            subBoundingBoxes[i] = BoundingBox3f(mins[i], mins[i] + 0.5 * dir);
+        }
+
+        // sub-bounding box에 속하는 triangles를 저장하는 배열
+        std::array<std::vector<uint32_t>, 8> childTriangles = {};
+
+        std::vector<uint32_t>::iterator it;
+        for (it = inputTriangles->begin(); it != inputTriangles->end(); ++it) {
+            const uint32_t idx = *it;
+            const MatrixXu &faces = mesh->getIndices();
+            const MatrixXf &vertices = mesh->getVertexPositions();
+
+            uint32_t i0 = faces(0, idx), i1 = faces(1, idx), i2 = faces(2, idx);
+            Point3f v0 = vertices.col(i0), v1 = vertices.col(i1),
+                    v2 = vertices.col(i2);
+
+            // construct bounding box of triangle
+            BoundingBox3f triBoundingBox = BoundingBox3f(v0);
+            triBoundingBox.expandBy(v1);
+            triBoundingBox.expandBy(v2);
+
+            for (int i = 0; i < 8; ++i) {
+                // check bounding box of triangle and sub-bounding box overlaps
+                if (subBoundingBoxes[i].overlaps(triBoundingBox)) {
+                    childTriangles[i].push_back(idx);
+                }
             }
         }
-    }
 
-    for (int i = 0; i < 8; ++i) {
-        children[i] =
-            new OctreeNode(mesh, depth + 1, &mins[i], &childTriangles[i]);
+        for (int i = 0; i < 8; ++i) {
+            children[i] =
+                new OctreeNode(mesh, depth + 1, &mins[i], &childTriangles[i]);
+        }
     }
 };
 
@@ -141,7 +136,7 @@ void Accel::build() {
     m_root = new OctreeNode(m_mesh, 0, &min, &totalTriangles);
     float end = clock();
 
-    std::cout << "Octree build done in" << start - end << "ms" << std::endl;
+    std::cout << "Octree build done" << std::endl;
 
     return;
 }
@@ -190,7 +185,7 @@ void Accel::traverseOctree(OctreeNode *node, Ray3f &ray, Intersection &its,
              triIt != node->triangles->end(); triIt++) {
             float u, v, t;
 
-            if (m_mesh->rayIntersect(*triIt, ray, u, v, t)) {
+            if (m_mesh->rayIntersect(*triIt, ray, u, v, t) && t < ray.maxt) {
                 ray.maxt = its.t = t;
                 its.uv = Point2f(u, v);
                 its.mesh = m_mesh;
