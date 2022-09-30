@@ -26,11 +26,10 @@
 
 NORI_NAMESPACE_BEGIN
 
-OctreeNode::OctreeNode(Mesh *inputMesh, uint32_t inputDepth, Point3f *inputMin,
+OctreeNode::OctreeNode(Mesh *inputMesh, uint32_t inputDepth,
+                       BoundingBox3f *inputBoundingBox,
                        std::vector<uint32_t> *inputTriangles)
-    : mesh(inputMesh),
-      depth(inputDepth),
-      minPoint(new Point3f((*inputMin).x(), (*inputMin).y(), (*inputMin).z())) {
+    : mesh(inputMesh), depth(inputDepth), boundingBox(inputBoundingBox) {
     if (inputTriangles == nullptr) {
         return;
     }
@@ -43,32 +42,28 @@ OctreeNode::OctreeNode(Mesh *inputMesh, uint32_t inputDepth, Point3f *inputMin,
 
         return;
     } else {
-        BoundingBox3f meshBoundingBox = mesh->getBoundingBox();
-        Point3f dir = meshBoundingBox.getExtents() / pow(2, depth);
-        Point3f &min = *minPoint;
+        const Point3f &min = inputBoundingBox->min;
+        const Point3f &center = inputBoundingBox->getCenter();
+        const Point3f &extents = inputBoundingBox->getExtents();
 
-        if (std::min({0.5 * dir.x(), 0.5 * dir.y(), 0.5 * dir.z()}) <=
+        if (std::min(
+                {0.5 * extents.x(), 0.5 * extents.y(), 0.5 * extents.z()}) <=
             std::numeric_limits<float>::epsilon()) {
             triangles = new std::vector<uint32_t>(*inputTriangles);
 
             return;
         }
 
-        BoundingBox3f boundingBox = BoundingBox3f(min, min + dir);
-
-        // center of bounding box
-        Point3f mid = boundingBox.getCenter();
-
         // sub-bounding box의 min을 저장하는 배열
         Point3f mins[8] = {
             min,
-            Point3f(min.x(), mid.y(), min.z()),
-            Point3f(mid.x(), mid.y(), min.z()),
-            Point3f(mid.x(), min.y(), min.z()),
-            Point3f(min.x(), min.y(), mid.z()),
-            Point3f(min.x(), mid.y(), mid.z()),
-            mid,
-            Point3f(mid.x(), min.y(), mid.z()),
+            Point3f(min.x(), center.y(), min.z()),
+            Point3f(center.x(), center.y(), min.z()),
+            Point3f(center.x(), min.y(), min.z()),
+            Point3f(min.x(), min.y(), center.z()),
+            Point3f(min.x(), center.y(), center.z()),
+            center,
+            Point3f(center.x(), min.y(), center.z()),
         };
         BoundingBox3f subBoundingBoxes[8];
 
