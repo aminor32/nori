@@ -34,18 +34,19 @@ NORI_NAMESPACE_BEGIN
 
 class OctreeNode {
    public:
-    OctreeNode(Mesh *mesh, uint32_t inputDepth, BoundingBox3f *inputBoundingBox,
-               std::vector<uint32_t> *inputTriangles);
+    // default constructor
+    OctreeNode(Mesh *mesh, uint32_t inputDepth, BoundingBox3f &inputBoundingBox,
+               std::vector<uint32_t> &inputTriangles);
 
     // input mesh 저장
     Mesh *mesh;
     // depth of node
     uint32_t depth;
-    // bounding box 꼭짓점 중 가장 작은 점
-    BoundingBox3f *boundingBox = new BoundingBox3f();
-    // boundingBox에 포함되는 삼각형 저장
-    std::vector<uint32_t> *triangles = nullptr;
-    // 자식 노드의 주소를 array로 저장, leaf node는 children.size() == 0
+    // bounding box
+    BoundingBox3f boundingBox = BoundingBox3f();
+    // bounding box에 포함되는 삼각형 저장 (leaf node만)
+    std::vector<uint32_t> triangles = {};
+    // 자식 노드의 주소를 array로 저장
     std::array<OctreeNode *, 8> children = {nullptr};
 
     std::string toString();
