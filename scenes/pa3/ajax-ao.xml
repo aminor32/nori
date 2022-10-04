@@ -1,7 +1,7 @@
 <scene>
 	<!-- Independent sample generator, 32 samples per pixel -->
 	<sampler type="independent">
-		<integer name="sampleCount" value="512"/>
+		<integer name="sampleCount" value="32"/>
 	</sampler>
 
 	<!-- Use the ambient occlusion integrator -->
