@@ -40,18 +40,18 @@ class SimpleIntegrator : public Integrator {
         Intersection its;
 
         if (!scene->rayIntersect(ray, its)) {
-            return Color3f(0.5);
+            return Color3f();
         } else {
             // normal at intersection point
             const Normal3f &n = its.shFrame.n;
             // position of intersection point
             const Point3f &x = its.p;
-            // direction of light toward intersection point
+            // direction of light from intersection point
             Vector3f dir = lightPosition - x;
             // square of distance between ray origin and intersection point
             float cosTheta = n.dot(dir) / (n.norm() * dir.norm());
 
-            Ray3f shadowRay = Ray3f(lightPosition, dir.normalized());
+            Ray3f shadowRay = Ray3f(x, dir.normalized());
             shadowRay.maxt = dir.norm();
 
             if (scene->rayIntersect(shadowRay)) {
@@ -83,12 +83,12 @@ class AOIntegrator : public Integrator {
         Intersection its;
 
         if (!scene->rayIntersect(ray, its)) {
-            return Color3f(0.5);
+            return Color3f();
         } else {
             // position of intersection point
             const Point3f &x = its.p;
             // number of samples per intersection
-            int sampleNum = 5;
+            int sampleNum = 10;
             // sum
             Color3f l = Color3f();
 
@@ -99,16 +99,17 @@ class AOIntegrator : public Integrator {
             for (int i = 0; i < sampleNum; i++) {
                 Vector3f sample = Warp::squareToCosineHemisphere(
                     Point2f(dist(rng), dist(rng)));
-                Vector3f w = its.shFrame.toWorld(sample).normalized();
+                Vector3f w = its.toWorld(sample);
                 float cosTheta = sample.z();
                 Ray3f shadowRay = Ray3f(x, w);
 
                 if (!scene->rayIntersect(shadowRay)) {
-                    l += INV_PI * std::max<float>(0, cosTheta);
+                    l += INV_PI * cosTheta /
+                         Warp::squareToCosineHemispherePdf(sample);
                 }
             }
 
-            return Color3f(l * M_PI * M_PI / sampleNum);
+            return Color3f(l / sampleNum);
         }
     }
 
