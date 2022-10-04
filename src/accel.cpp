@@ -29,15 +29,13 @@ NORI_NAMESPACE_BEGIN
 OctreeNode::OctreeNode(Mesh *inputMesh, uint32_t inputDepth,
                        BoundingBox3f *inputBoundingBox,
                        std::vector<uint32_t> *inputTriangles)
-    : mesh(inputMesh), depth(inputDepth), boundingBox(inputBoundingBox) {
+    : mesh(inputMesh),
+      depth(inputDepth),
+      boundingBox(
+          new BoundingBox3f(inputBoundingBox->min, inputBoundingBox->max)) {
     if (inputTriangles == nullptr) {
         return;
-    }
-    if (inputDepth > 15) {
-        triangles = new std::vector<uint32_t>(*inputTriangles);
-
-        return;
-    } else if (inputTriangles->size() < 10) {
+    } else if (inputDepth > 15 || inputTriangles->size() < 10) {
         triangles = new std::vector<uint32_t>(*inputTriangles);
 
         return;
@@ -68,7 +66,8 @@ OctreeNode::OctreeNode(Mesh *inputMesh, uint32_t inputDepth,
         BoundingBox3f subBoundingBoxes[8];
 
         for (int i = 0; i < 8; ++i) {
-            subBoundingBoxes[i] = BoundingBox3f(mins[i], mins[i] + 0.5 * dir);
+            subBoundingBoxes[i] =
+                BoundingBox3f(mins[i], mins[i] + 0.5 * extents);
         }
 
         // sub-bounding box에 속하는 triangles를 저장하는 배열
@@ -90,7 +89,8 @@ OctreeNode::OctreeNode(Mesh *inputMesh, uint32_t inputDepth,
             triBoundingBox.expandBy(v2);
 
             for (int i = 0; i < 8; ++i) {
-                // check bounding box of triangle and sub-bounding box overlaps
+                // check bounding box of triangle and sub-bounding box
+                // overlaps
                 if (subBoundingBoxes[i].overlaps(triBoundingBox)) {
                     childTriangles[i].push_back(idx);
                 }
@@ -98,15 +98,15 @@ OctreeNode::OctreeNode(Mesh *inputMesh, uint32_t inputDepth,
         }
 
         for (int i = 0; i < 8; ++i) {
-            children[i] =
-                new OctreeNode(mesh, depth + 1, &mins[i], &childTriangles[i]);
+            children[i] = new OctreeNode(mesh, depth + 1, &subBoundingBoxes[i],
+                                         &childTriangles[i]);
         }
     }
 };
 
 std::string OctreeNode::toString() {
     return tfm::format("OctreeNode: depth=%d, minPoint=%s, trianglesNum=%d",
-                       depth, minPoint->toString(),
+                       depth, boundingBox->min.toString(),
                        triangles && triangles->size());
 }
 
@@ -119,7 +119,6 @@ void Accel::addMesh(Mesh *mesh) {
 /* returns reference of root of Octree */
 void Accel::build() {
     BoundingBox3f meshBoundingBox = m_mesh->getBoundingBox();
-    Point3f min = meshBoundingBox.min;
     uint32_t triangleNum = m_mesh->getTriangleCount();
     std::vector<uint32_t> totalTriangles;
 
@@ -127,9 +126,7 @@ void Accel::build() {
         totalTriangles.push_back(i);
     }
 
-    float start = clock();
-    m_root = new OctreeNode(m_mesh, 0, &min, &totalTriangles);
-    float end = clock();
+    m_root = new OctreeNode(m_mesh, 0, &meshBoundingBox, &totalTriangles);
 
     std::cout << "Octree build done" << std::endl;
 
@@ -139,36 +136,23 @@ void Accel::build() {
 void Accel::traverseOctree(OctreeNode *node, Ray3f &ray, Intersection &its,
                            bool shadowRay, bool &foundIntersection,
                            uint32_t &f) const {
-    BoundingBox3f meshBoundingBox = m_mesh->getBoundingBox();
-    Point3f dir = meshBoundingBox.getExtents();
-    Point3f &min = *(node->minPoint);
-    BoundingBox3f boundingBox =
-        BoundingBox3f(min, min + dir / pow(2, node->depth));
+    BoundingBox3f &boundingBox = *(node->boundingBox);
     bool boxIntersection = boundingBox.rayIntersect(ray);
 
     if (boxIntersection && node->triangles == nullptr) {
         std::array<OctreeNode *, 8> &children = node->children;
 
         std::sort(children.begin(), children.end(),
-                  [&ray, &dir](OctreeNode *node1, OctreeNode *node2) {
-                      Point3f &min1 = *(node1->minPoint);
-                      Point3f &min2 = *(node2->minPoint);
-                      BoundingBox3f box1 = BoundingBox3f(
-                          min1, min1 + dir / pow(2, node1->depth));
-                      BoundingBox3f box2 = BoundingBox3f(
-                          min2, min2 + dir / pow(2, node2->depth));
-
-                      return box1.distanceTo(ray.o) < box2.distanceTo(ray.o);
+                  [&ray](OctreeNode *node1, OctreeNode *node2) {
+                      return node1->boundingBox->distanceTo(ray.o) <
+                             node2->boundingBox->distanceTo(ray.o);
                   });
 
         // not leaf node
         std::array<OctreeNode *, 8>::const_iterator childIt;
         for (childIt = children.begin(); childIt != children.end(); childIt++) {
-            Point3f &min = *((*childIt)->minPoint);
-            BoundingBox3f childBox =
-                BoundingBox3f(min, min + dir / pow(2, node->depth + 1));
-
-            if (childBox.distanceTo(ray.o) > ray.maxt) {
+            const OctreeNode *child = *childIt;
+            if (child->boundingBox->distanceTo(ray.o) > ray.maxt) {
                 break;
             }
 
