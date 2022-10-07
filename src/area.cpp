@@ -1,4 +1,11 @@
+#include <nori/bsdf.h>
 #include <nori/emitter.h>
+#include <nori/mesh.h>
+#include <nori/scene.h>
+#include <nori/warp.h>
+
+#include <cmath>
+#include <random>
 
 NORI_NAMESPACE_BEGIN
 
@@ -8,13 +15,24 @@ class AreaLight : public Emitter {
         radiance = props.getColor("radiance");
     }
 
-    Color3f getRadiance(Point3f *lightSample) const { return radiance; }
+    Color3f Le(const Mesh &mesh) const {
+        Sample lightSample = mesh.sampleMesh();
+
+        std::random_device rd;
+        std::mt19937 rng(rd());
+        std::uniform_real_distribution<float> dist(0, 1);
+
+        Point2f uSquareSample = Point2f(dist(rng), dist(rng));
+        Vector3f cosHemisphereSample =
+            Warp::squareToCosineHemisphere(uSquareSample);
+
+        Frame lightSampleFrame = Frame(lightSample.n);
+        Vector3f wo = lightSampleFrame.toWorld(cosHemisphereSample);
+
+        return lightSample.n.dot(wo) > 0 ? radiance : Color3f();
+    }
 
     std::string toString() const { return "AreaLight[]"; }
-
-   private:
-    // radiance of the light source
-    Color3f radiance;
 };
 
 NORI_REGISTER_CLASS(AreaLight, "area");

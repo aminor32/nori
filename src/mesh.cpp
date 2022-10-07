@@ -140,7 +140,7 @@ void Mesh::addChild(NoriObject *obj) {
     }
 }
 
-Sample Mesh::getUniformSample(Point2f sample) const {
+Sample Mesh::sampleMesh() const {
     // sample triangle from generated pdf
     std::random_device rd;
     std::mt19937 rng(rd());

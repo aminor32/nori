@@ -25,14 +25,20 @@ NORI_NAMESPACE_BEGIN
 /**
  * \brief Superclass of all emitters
  */
+
 class Emitter : public NoriObject {
-public:
+   public:
+    virtual Color3f Le(const Mesh &mesh) const = 0;
 
     /**
-     * \brief Return the type of object (i.e. Mesh/Emitter/etc.) 
+     * \brief Return the type of object (i.e. Mesh/Emitter/etc.)
      * provided by this instance
      * */
     EClassType getClassType() const { return EEmitter; }
+
+   protected:
+    // radiance of the light source
+    Color3f radiance;
 };
 
 NORI_NAMESPACE_END
