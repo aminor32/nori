@@ -26,32 +26,42 @@ class Whitted : public Integrator {
         }
     }
 
-    Color3f sampleIntegralBody(const Scene *scene, Ray3f &ray,
-                               Intersection &its) {
-        const Mesh &mesh = *(its.mesh);
-        Sample lightSample = mesh.sampleMesh();
-        Vector3f wi = lightSample.p - its.p;  // not normalized !
+    Color3f sampleIntegralBody(const Scene *scene, const Ray3f &ray,
+                               Intersection &its) const {
+        std::cout << "sampleIntegralBody" << std::endl;
+
+        // select random emitter
+        // TODO: select by pdf
+        std::random_device rd;
+        std::mt19937 rng(rd());
+        std::uniform_int_distribution<int> dist(0, emitters.size());
+        const Mesh *emitter = emitters[dist(rng)];
+
+        // sample from light source
+        Sample lightSample = emitter->sampleMesh();
+        Vector3f toLight = lightSample.p - its.p;  // not normalized !
 
         const BSDF &bsdf = *(its.mesh->getBSDF());
         BSDFQueryRecord bsdfQR =
-            BSDFQueryRecord(wi.normalized(), -ray.d, EDiscrete);
+            BSDFQueryRecord(its.toLocal(toLight).normalized(),
+                            its.toLocal(-ray.d).normalized(), EDiscrete);
         Color3f fr = bsdf.eval(bsdfQR);
 
-        Ray3f shadowRay = Ray3f(its.p, wi.normalized());
-        shadowRay.maxt = wi.norm();
+        // calculate visibility term
+        Ray3f shadowRay = Ray3f(its.p, toLight.normalized());
+        shadowRay.maxt = toLight.norm();
         float visibility = scene->rayIntersect(shadowRay) ? 0.f : 1.f;
+        std::cout << "here" << std::endl;
+
+        // calculate geometric term
         Color3f geometric =
             visibility *
-            std::abs(its.shFrame.cosTheta(its.shFrame.toLocal(wi)) *
-                     lightSample.n.dot(wi)) /
-            wi.squaredNorm();
+            std::abs(its.shFrame.cosTheta(its.toLocal(toLight)) *
+                     lightSample.n.dot(toLight)) /
+            toLight.squaredNorm();
 
-        std::random_device rd;
-        std::mt19937 rng(rd());
-        std::uniform_int_distribution<float> dist(0, emitters.size());
-        const Mesh *emitter = emitters[dist(rng)];
-
-        return fr * geometric * emitter->getEmitter()->Le(*emitter);
+        return fr * geometric * emitter->getEmitter()->Le(*emitter) /
+               lightSample.pdf;
     }
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
@@ -60,8 +70,21 @@ class Whitted : public Integrator {
         if (!scene->rayIntersect(ray, its)) {
             return Color3f();
         } else {
-            Normal3f itsNormal = its.shFrame.n;
-            Vector3f reflection = ray.d - 2 * itsNormal.dot(ray.d) * itsNormal;
+            Color3f Le = Color3f(), Lr = Color3f();
+            const Mesh &mesh = *(its.mesh);
+
+            // add Le
+            if (mesh.isEmitter()) {
+                Le = mesh.getEmitter()->Le(mesh);
+            }
+
+            // integral over light sources
+            int sampleNum = 5;
+            for (int i = 0; i < sampleNum; i++) {
+                Lr += sampleIntegralBody(scene, ray, its);
+            }
+
+            return Le + Lr / sampleNum;
         }
     }
 
