@@ -164,6 +164,8 @@ class Mesh : public NoriObject {
     /// Return a pointer to the BSDF associated with this mesh
     const BSDF *getBSDF() const { return m_bsdf; }
 
+    const float getAreaSum() const { return areaSum; }
+
     /// Register a child object (e.g. a BSDF) with the mesh
     virtual void addChild(NoriObject *child);
 

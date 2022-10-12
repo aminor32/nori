@@ -147,6 +147,7 @@ Sample Mesh::sampleMesh() const {
     std::uniform_real_distribution<float> dist(0, 1);
 
     uint32_t sampleFace = dpdf.sample(dist(rng));
+
     uint32_t idx0 = m_F(0, sampleFace), idx1 = m_F(1, sampleFace),
              idx2 = m_F(2, sampleFace);
     Point3f p0 = m_V.col(idx0), p1 = m_V.col(idx1), p2 = m_V.col(idx2);

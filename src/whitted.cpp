@@ -1,4 +1,5 @@
 #include <nori/bsdf.h>
+#include <nori/dpdf.h>
 #include <nori/emitter.h>
 #include <nori/integrator.h>
 #include <nori/scene.h>
@@ -20,22 +21,24 @@ class Whitted : public Integrator {
 
         for (std::vector<Mesh *>::const_iterator it = meshes.begin();
              it < meshes.end(); ++it) {
-            if ((*it)->isEmitter()) {
-                emitters.push_back(*it);
+            Mesh *mesh = *it;
+            if (mesh->isEmitter()) {
+                dpdf.append(mesh->getAreaSum());
+                emitters.push_back(mesh);
             }
         }
     }
 
     Color3f sampleIntegralBody(const Scene *scene, const Ray3f &ray,
                                Intersection &its) const {
-        std::cout << "sampleIntegralBody" << std::endl;
-
+        std::cout << "ib" << std::endl;
         // select random emitter
         // TODO: select by pdf
         std::random_device rd;
         std::mt19937 rng(rd());
         std::uniform_int_distribution<int> dist(0, emitters.size());
-        const Mesh *emitter = emitters[dist(rng)];
+        int sample = dpdf.sample(dist(rng));
+        const Mesh *emitter = emitters[sample];
 
         // sample from light source
         Sample lightSample = emitter->sampleMesh();
@@ -43,7 +46,7 @@ class Whitted : public Integrator {
 
         const BSDF &bsdf = *(its.mesh->getBSDF());
         BSDFQueryRecord bsdfQR =
-            BSDFQueryRecord(its.toLocal(toLight).normalized(),
+            BSDFQueryRecord(its.toLocal(-toLight).normalized(),
                             its.toLocal(-ray.d).normalized(), EDiscrete);
         Color3f fr = bsdf.eval(bsdfQR);
 
@@ -51,7 +54,6 @@ class Whitted : public Integrator {
         Ray3f shadowRay = Ray3f(its.p, toLight.normalized());
         shadowRay.maxt = toLight.norm();
         float visibility = scene->rayIntersect(shadowRay) ? 0.f : 1.f;
-        std::cout << "here" << std::endl;
 
         // calculate geometric term
         Color3f geometric =
@@ -92,6 +94,7 @@ class Whitted : public Integrator {
 
    private:
     std::vector<const Mesh *> emitters = {};
+    DiscretePDF dpdf;
 };
 
 NORI_REGISTER_CLASS(Whitted, "whitted");
