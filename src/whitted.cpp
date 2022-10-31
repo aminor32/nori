@@ -5,7 +5,6 @@
 #include <nori/scene.h>
 
 #include <random>
-#include <string>
 #include <vector>
 
 NORI_NAMESPACE_BEGIN
@@ -22,8 +21,8 @@ class Whitted : public Integrator {
         for (std::vector<Mesh *>::const_iterator it = meshes.begin();
              it < meshes.end(); ++it) {
             Mesh *mesh = *it;
+
             if (mesh->isEmitter()) {
-                dpdf.append(mesh->getAreaSum());
                 emitters.push_back(mesh);
             }
         }
@@ -31,7 +30,6 @@ class Whitted : public Integrator {
 
     Color3f sampleIntegralBody(const Scene *scene, const Ray3f &ray,
                                Intersection &its) const {
-        std::cout << "ib" << std::endl;
         // select random emitter
         // TODO: select by pdf
         std::random_device rd;

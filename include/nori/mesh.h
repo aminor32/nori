@@ -164,8 +164,6 @@ class Mesh : public NoriObject {
     /// Return a pointer to the BSDF associated with this mesh
     const BSDF *getBSDF() const { return m_bsdf; }
 
-    const float getAreaSum() const { return areaSum; }
-
     /// Register a child object (e.g. a BSDF) with the mesh
     virtual void addChild(NoriObject *child);
 
@@ -197,8 +195,7 @@ class Mesh : public NoriObject {
     BSDF *m_bsdf = nullptr;        ///< BSDF of the surface
     Emitter *m_emitter = nullptr;  ///< Associated emitter, if any
     BoundingBox3f m_bbox;          ///< Bounding box of the mesh
-    DiscretePDF dpdf;   ///< Discrete probability density function of mesh
-    float areaSum = 0;  ///< surface area of the mesh
+    DiscretePDF dpdf;  ///< Discrete probability density function of mesh
 };
 
 NORI_NAMESPACE_END

@@ -26,6 +26,7 @@
 #include <Eigen/Geometry>
 #include <cmath>
 #include <random>
+#include <string>
 
 NORI_NAMESPACE_BEGIN
 
@@ -47,17 +48,11 @@ void Mesh::activate() {
     const uint32_t nTriangle = (uint32_t)m_F.cols();
     dpdf = DiscretePDF(nTriangle);
 
-    float triangleArea[nTriangle] = {0};
     for (uint32_t f = 0; f < nTriangle; f++) {
-        float area = surfaceArea(f);
-
-        areaSum += area;
-        triangleArea[f] = area;
+        dpdf.append(surfaceArea(f));
     }
 
-    for (uint32_t f = 0; f < nTriangle; f++) {
-        dpdf.append(triangleArea[f] / areaSum);
-    }
+    dpdf.normalize();
 }
 
 float Mesh::surfaceArea(uint32_t index) const {
@@ -151,7 +146,13 @@ Sample Mesh::sampleMesh() const {
     uint32_t idx0 = m_F(0, sampleFace), idx1 = m_F(1, sampleFace),
              idx2 = m_F(2, sampleFace);
     Point3f p0 = m_V.col(idx0), p1 = m_V.col(idx1), p2 = m_V.col(idx2);
-    Normal3f n0 = m_N.col(idx0), n1 = m_N.col(idx1), n2 = m_N.col(idx2);
+    Normal3f n0 = Normal3f(), n1 = Normal3f(), n2 = Normal3f();
+
+    if (m_N.size() > 0) {
+        n0 = m_N.col(idx0);
+        n1 = m_N.col(idx1);
+        n2 = m_N.col(idx2);
+    }
 
     // sample point from sampled triangle
     float zeta1 = dist(rng), zeta2 = dist(rng);
@@ -161,6 +162,7 @@ Sample Mesh::sampleMesh() const {
     Point3f samplePoint = alpha * p0 + beta * p1 + (1 - alpha - beta) * p2;
     Normal3f normal = alpha * n0 + beta * n1 + (1 - alpha - beta) * n2;
     float pdf = dpdf[sampleFace];
+    std::cout << "normal: " << normal.toString() << std::endl;
 
     return Sample(samplePoint, normal, pdf);
 }
