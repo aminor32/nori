@@ -48,8 +48,6 @@ class Whitted : public Integrator {
                             its.toLocal(-ray.d).normalized(), ESolidAngle);
         Color3f fr = bsdf.eval(bsdfQR);
 
-        std::cout << fr.toString() << std::endl;
-
         // calculate visibility term
         Ray3f shadowRay = Ray3f(its.p, toLight.normalized());
         shadowRay.maxt = toLight.norm();
@@ -62,9 +60,9 @@ class Whitted : public Integrator {
                      lightSample.n.dot(toLight)) /
             toLight.squaredNorm();
 
-        Color3f integralBody = fr * geometric *
-                               emitter->getEmitter()->Le(*emitter) *
-                               lightSample.pdf;
+        Color3f integralBody = lightSample.pdf * fr * geometric *
+                               emitter->getEmitter()->Le(*emitter) /
+                               toLight.norm();
 
         return integralBody;
     }
