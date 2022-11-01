@@ -16,7 +16,6 @@ class AreaLight : public Emitter {
     }
 
     Color3f Le(const Mesh &mesh) const {
-        /* std::cout << "Le" << std::endl;
         Sample lightSample = mesh.sampleMesh();
 
         std::random_device rd;
@@ -28,9 +27,7 @@ class AreaLight : public Emitter {
         Frame lightSampleFrame = Frame(lightSample.n);
         wo = lightSampleFrame.toWorld(wo);
 
-        return lightSample.n.dot(wo) > 0 ? radiance : Color3f(); */
-
-        return Color3f(40, 40, 40);
+        return lightSample.n.dot(wo) > 0 ? radiance : Color3f();
     }
 
     std::string toString() const { return "AreaLight[]"; }

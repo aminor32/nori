@@ -123,7 +123,7 @@ void Mesh::addChild(NoriObject *obj) {
 
         case EEmitter: {
             Emitter *emitter = static_cast<Emitter *>(obj);
-            if (m_emitter)
+            if (m_emitter != nullptr)
                 throw NoriException(
                     "Mesh: tried to register multiple Emitter instances!");
             m_emitter = emitter;
@@ -141,28 +141,34 @@ Sample Mesh::sampleMesh() const {
     std::mt19937 rng(rd());
     std::uniform_real_distribution<float> dist(0, 1);
 
-    uint32_t sampleFace = dpdf.sample(dist(rng));
-
-    uint32_t idx0 = m_F(0, sampleFace), idx1 = m_F(1, sampleFace),
-             idx2 = m_F(2, sampleFace);
-    Point3f p0 = m_V.col(idx0), p1 = m_V.col(idx1), p2 = m_V.col(idx2);
-    Normal3f n0 = Normal3f(), n1 = Normal3f(), n2 = Normal3f();
-
-    if (m_N.size() > 0) {
-        n0 = m_N.col(idx0);
-        n1 = m_N.col(idx1);
-        n2 = m_N.col(idx2);
-    }
-
-    // sample point from sampled triangle
-    float zeta1 = dist(rng), zeta2 = dist(rng);
     // value for barycentric coordinate
+    float zeta1 = dist(rng), zeta2 = dist(rng);
     float alpha = 1 - std::sqrt(1 - zeta1), beta = zeta2 * std::sqrt(1 - zeta1);
 
+    // sample face
+    uint32_t sampleFace = dpdf.sample(dist(rng));
+    uint32_t idx0 = m_F(0, sampleFace), idx1 = m_F(1, sampleFace),
+             idx2 = m_F(2, sampleFace);
+
+    // sample point on the mesh
+    Point3f p0 = m_V.col(idx0), p1 = m_V.col(idx1), p2 = m_V.col(idx2);
     Point3f samplePoint = alpha * p0 + beta * p1 + (1 - alpha - beta) * p2;
-    Normal3f normal = alpha * n0 + beta * n1 + (1 - alpha - beta) * n2;
+
+    // sample normal
+    Normal3f normal;
+    if (m_N.size() > 0) {
+        // if vertex normal is given
+        Normal3f n0 = m_N.col(idx0), n1 = m_N.col(idx1), n2 = m_N.col(idx2);
+
+        normal = alpha * n0 + beta * n1 + (1 - alpha - beta) * n2;
+    } else if (m_emitter) {
+        // if vertex normal is not given & mesh is emitter
+        // we need to calculate normal to get geometric term
+        normal = (p1 - p0).cross(p2 - p1).normalized();
+    }
+
+    // get pdf of the sampled face
     float pdf = dpdf[sampleFace];
-    std::cout << "normal: " << normal.toString() << std::endl;
 
     return Sample(samplePoint, normal, pdf);
 }

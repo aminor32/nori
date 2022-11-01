@@ -44,9 +44,11 @@ class Whitted : public Integrator {
 
         const BSDF &bsdf = *(its.mesh->getBSDF());
         BSDFQueryRecord bsdfQR =
-            BSDFQueryRecord(its.toLocal(-toLight).normalized(),
-                            its.toLocal(-ray.d).normalized(), EDiscrete);
+            BSDFQueryRecord(its.toLocal(toLight).normalized(),
+                            its.toLocal(-ray.d).normalized(), ESolidAngle);
         Color3f fr = bsdf.eval(bsdfQR);
+
+        std::cout << fr.toString() << std::endl;
 
         // calculate visibility term
         Ray3f shadowRay = Ray3f(its.p, toLight.normalized());
@@ -60,8 +62,11 @@ class Whitted : public Integrator {
                      lightSample.n.dot(toLight)) /
             toLight.squaredNorm();
 
-        return fr * geometric * emitter->getEmitter()->Le(*emitter) /
-               lightSample.pdf;
+        Color3f integralBody = fr * geometric *
+                               emitter->getEmitter()->Le(*emitter) *
+                               lightSample.pdf;
+
+        return integralBody;
     }
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
