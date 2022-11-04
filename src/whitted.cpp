@@ -7,6 +7,8 @@
 #include <random>
 #include <vector>
 
+#define SAMPLE_NUM 5
+
 NORI_NAMESPACE_BEGIN
 
 class Whitted : public Integrator {
@@ -73,21 +75,43 @@ class Whitted : public Integrator {
         if (!scene->rayIntersect(ray, its)) {
             return Color3f();
         } else {
-            Color3f Le = Color3f(), Lr = Color3f();
             const Mesh &mesh = *(its.mesh);
+            const BSDF &bsdf = *(mesh.getBSDF());
 
-            // add Le
-            if (mesh.isEmitter()) {
-                Le = mesh.getEmitter()->Le(mesh);
+            if (bsdf.isDiffuse()) {
+                // diffuse
+                Color3f Le = Color3f(), Lr = Color3f();
+
+                // add Le if mesh is emitter
+                if (mesh.isEmitter()) {
+                    Le = mesh.getEmitter()->Le(mesh);
+                }
+
+                // integral over light sources
+                for (int i = 0; i < SAMPLE_NUM; i++) {
+                    Lr += sampleIntegralBody(scene, ray, its);
+                }
+
+                return Le + Lr / SAMPLE_NUM;
+            } else {
+                // specular
+                std::random_device rd;
+                std::mt19937 rng(rd());
+                std::uniform_real_distribution<float> dist(0, 1);
+
+                BSDFQueryRecord bsdfQR = BSDFQueryRecord(-ray.d);
+                Color3f result = Color3f();
+                for (int i = 0; i < SAMPLE_NUM; i++) {
+                    bsdf.sample(bsdfQR, Point2f(dist(rng), dist(rng)));
+
+                    float zeta = dist(rng);
+
+                    if (zeta < 0.95) {
+                        result += (1 / 0.95) * (1 / SAMPLE_NUM) *
+                                  Li(scene, sampler, Ray3f(its.p, bsdfQR.wo));
+                    }
+                }
             }
-
-            // integral over light sources
-            int sampleNum = 5;
-            for (int i = 0; i < sampleNum; i++) {
-                Lr += sampleIntegralBody(scene, ray, its);
-            }
-
-            return Le + Lr / sampleNum;
         }
     }
 

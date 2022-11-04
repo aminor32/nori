@@ -57,17 +57,24 @@ class Dielectric : public BSDF {
             Point2f diskSample = Warp::squareToUniformDisk(sample);
 
             if (diskSample.norm() < fresnel) {
+                // reflection
                 bRec.wo = Vector3f(-bRec.wi.x(), -bRec.wi.y(), bRec.wi.z());
+                bRec.eta = 1.0f;
             } else {
+                // refraction
                 float sinWo = m_extIOR * sinWi / m_intIOR;
                 float cosWo = std::sqrt(1 - sinWo * sinWo);
 
                 bRec.wo = m_intIOR * (bRec.wi - cosWi * Vector3f(0, 0, 1)) -
                           cosWo * Vector3f(0, 0, 1);
+                bRec.eta = m_intIOR / m_extIOR;
             }
         } else {
             bRec.wo = Vector3f(-bRec.wi.x(), -bRec.wi.y(), bRec.wi.z());
+            bRec.eta = 1.0f;
         }
+
+        bRec.measure = EDiscrete;
     }
 
     std::string toString() const {
