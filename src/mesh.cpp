@@ -170,7 +170,7 @@ Sample Mesh::sampleMesh() const {
     // get pdf of the sampled face
     float pdf = dpdf[sampleFace];
 
-    return Sample(samplePoint, normal, pdf);
+    return Sample(samplePoint, normal.normalized(), pdf);
 }
 
 std::string Mesh::toString() const {

@@ -45,36 +45,41 @@ class Dielectric : public BSDF {
     }
 
     Color3f sample(BSDFQueryRecord &bRec, const Point2f &sample) const {
-        if (Frame::cosTheta(bRec.wi) <= 0) {
-            return Color3f();
+        Vector3f n;
+        float ni, no;
+        float sinTheta_i = Frame::sinTheta(bRec.wi);
+        float cosTheta_i = Frame::cosTheta(bRec.wi);
+
+        if (cosTheta_i > 0) {
+            // from outside to inside of the mesh
+            n = Vector3f(0, 0, 1);
+            ni = m_extIOR;
+            no = m_intIOR;
+        } else {
+            // from inside to outside of the mesh
+            n = Vector3f(0, 0, -1);
+            ni = m_intIOR;
+            no = m_extIOR;
         }
 
-        float sinWi = Frame::sinTheta(bRec.wi);
-        float cosWi = Frame::cosTheta(bRec.wi);
-        float fresnel = nori::fresnel(cosWi, m_extIOR, m_intIOR);
+        float sinTheta_o = ni * sinTheta_i / no;
+        float cosTheta_o = std::sqrt(1 - sinTheta_o * sinTheta_o);
+        float fresnel = nori::fresnel(std::abs(cosTheta_i), ni, no);
 
-        if (fresnel < 1) {
-            Point2f diskSample = Warp::squareToUniformDisk(sample);
-
-            if (diskSample.norm() < fresnel) {
-                // reflection
-                bRec.wo = Vector3f(-bRec.wi.x(), -bRec.wi.y(), bRec.wi.z());
-                bRec.eta = 1.0f;
-            } else {
-                // refraction
-                float sinWo = m_extIOR * sinWi / m_intIOR;
-                float cosWo = std::sqrt(1 - sinWo * sinWo);
-
-                bRec.wo = m_intIOR * (bRec.wi - cosWi * Vector3f(0, 0, 1)) -
-                          cosWo * Vector3f(0, 0, 1);
-                bRec.eta = m_intIOR / m_extIOR;
-            }
-        } else {
+        if (sample.x() <= fresnel) {
+            // reflection (in local frame)
             bRec.wo = Vector3f(-bRec.wi.x(), -bRec.wi.y(), bRec.wi.z());
             bRec.eta = 1.0f;
+        } else {
+            // refraction (in local frame)
+            bRec.wo = sinTheta_o * (-bRec.wi + cosTheta_i * n) / sinTheta_i -
+                      cosTheta_o * n;
+            bRec.eta = no / ni;
         }
 
         bRec.measure = EDiscrete;
+
+        return Color3f(1.f);
     }
 
     std::string toString() const {
