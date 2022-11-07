@@ -32,9 +32,8 @@ class Whitted : public Integrator {
 
     Color3f sampleIntegralBody(const Scene *scene, const Ray3f &ray,
                                Intersection &its) const {
-        std::vector<const Mesh *> emitters = {};
         const std::vector<Mesh *> &meshes = scene->getMeshes();
-
+        std::vector<const Mesh *> emitters = {};
         for (std::vector<Mesh *>::const_iterator it = meshes.begin();
              it < meshes.end(); ++it) {
             Mesh *mesh = *it;
@@ -44,35 +43,45 @@ class Whitted : public Integrator {
             }
         }
 
+        DiscretePDF dpdf = DiscretePDF(emitters.size());
+        for (std::vector<const Mesh *>::iterator it = emitters.begin();
+             it < emitters.end(); ++it) {
+            const Mesh *emitter = *it;
+
+            dpdf.append(emitter->getDiscretePDF().getSum());
+        }
+        dpdf.normalize();
+
         // select random emitter
-        // TODO: select by pdf
         std::random_device rd;
         std::mt19937 rng(rd());
-        std::uniform_int_distribution<int> dist(0, emitters.size());
+        std::uniform_real_distribution<int> dist(0, 1);
         int sample = dpdf.sample(dist(rng));
-
         const Mesh *emitter = emitters[sample];
 
         // sample from light source
         Sample lightSample = emitter->sampleMesh();
-        Vector3f toLight = lightSample.p - its.p;  // not normalized !
+        Vector3f light = lightSample.p - its.p;
 
         const BSDF &bsdf = *(its.mesh->getBSDF());
-        BSDFQueryRecord bsdfQR = BSDFQueryRecord(
-            its.toLocal(toLight), its.toLocal(-ray.d), ESolidAngle);
+        BSDFQueryRecord bsdfQR =
+            BSDFQueryRecord(its.toLocal(light).normalized(),
+                            its.toLocal(-ray.d).normalized(), ESolidAngle);
         Color3f fr = bsdf.eval(bsdfQR);
 
-        // calculate geometric term
-        Ray3f shadowRay = Ray3f(its.p, toLight.normalized());
-        shadowRay.maxt = toLight.norm();
+        // calculate geometric terms
+        Ray3f shadowRay = Ray3f(its.p, light.normalized());
+        shadowRay.maxt = light.norm();
         float visibility = scene->rayIntersect(shadowRay) ? 0.f : 1.f;
         Color3f geometric =
-            visibility * std::abs((its.shFrame.cosTheta(
-                                      (its.toLocal(toLight)).normalized())) *
-                                  lightSample.n.dot(toLight.normalized()));
+            visibility *
+            std::abs((its.shFrame.n.dot(light)) * lightSample.n.dot(light)) /
+            light.squaredNorm();
 
-        return lightSample.pdf * fr * geometric *
-               emitter->getEmitter()->Le(*emitter) / toLight.squaredNorm();
+        return fr * geometric *
+               (std::abs(lightSample.n.dot(light.normalized())) *
+                emitter->getEmitter()->Le(*emitter) / light.squaredNorm()) /
+               (lightSample.pdf * dpdf[sample]);
     }
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
@@ -125,7 +134,7 @@ class Whitted : public Integrator {
 
    private:
     // std::vector<const Mesh *> emitters = {};
-    DiscretePDF dpdf;
+    // DiscretePDF dpdf;
 };
 
 NORI_REGISTER_CLASS(Whitted, "whitted");

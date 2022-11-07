@@ -34,7 +34,7 @@ struct Sample {
 
     // sample point on the surface of the mesh
     Point3f p;
-    // surface normal(per-vertex normals. if per-vertes normals are not
+    // surface normal(per-vertex normals. if per-vertex normals are not
     // provided, face normals.)
     Normal3f n;
     // pdf of the sample
@@ -163,6 +163,8 @@ class Mesh : public NoriObject {
 
     /// Return a pointer to the BSDF associated with this mesh
     const BSDF *getBSDF() const { return m_bsdf; }
+
+    const DiscretePDF getDiscretePDF() const { return dpdf; }
 
     /// Register a child object (e.g. a BSDF) with the mesh
     virtual void addChild(NoriObject *child);
