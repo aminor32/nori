@@ -7,7 +7,7 @@
 #include <random>
 #include <vector>
 
-#define SAMPLE_NUM 5
+#define SAMPLE_NUM 10
 
 NORI_NAMESPACE_BEGIN
 
@@ -18,45 +18,27 @@ class Whitted : public Integrator {
     }
 
     void preprocess(const Scene *scene) {
-        /* const std::vector<Mesh *> &meshes = scene->getMeshes();
+        const std::vector<Mesh *> &emitters = scene->getEmitters();
 
-        for (std::vector<Mesh *>::const_iterator it = meshes.begin();
-             it < meshes.end(); ++it) {
-            Mesh *mesh = *it;
+        for (std::vector<Mesh *>::const_iterator it = emitters.begin();
+             it < emitters.end(); ++it) {
+            const Mesh *emitter = *it;
 
-            if (mesh->isEmitter()) {
-                emitters.push_back(mesh);
-            }
-        } */
+            emitterDPDF.append(emitter->getDiscretePDF().getSum());
+        }
+
+        emitterDPDF.normalize();
     }
 
     Color3f sampleIntegralBody(const Scene *scene, const Ray3f &ray,
                                Intersection &its) const {
-        const std::vector<Mesh *> &meshes = scene->getMeshes();
-        std::vector<const Mesh *> emitters = {};
-        for (std::vector<Mesh *>::const_iterator it = meshes.begin();
-             it < meshes.end(); ++it) {
-            Mesh *mesh = *it;
-
-            if (mesh->isEmitter()) {
-                emitters.push_back(mesh);
-            }
-        }
-
-        DiscretePDF dpdf = DiscretePDF(emitters.size());
-        for (std::vector<const Mesh *>::iterator it = emitters.begin();
-             it < emitters.end(); ++it) {
-            const Mesh *emitter = *it;
-
-            dpdf.append(emitter->getDiscretePDF().getSum());
-        }
-        dpdf.normalize();
+        const std::vector<Mesh *> &emitters = scene->getEmitters();
 
         // select random emitter
         std::random_device rd;
         std::mt19937 rng(rd());
-        std::uniform_real_distribution<int> dist(0, 1);
-        int sample = dpdf.sample(dist(rng));
+        std::uniform_real_distribution<float> dist(0, 1);
+        int sample = emitterDPDF.sample(dist(rng));
         const Mesh *emitter = emitters[sample];
 
         // sample from light source
@@ -81,7 +63,7 @@ class Whitted : public Integrator {
         return fr * geometric *
                (std::abs(lightSample.n.dot(light.normalized())) *
                 emitter->getEmitter()->Le(*emitter) / light.squaredNorm()) /
-               (lightSample.pdf * dpdf[sample]);
+               (lightSample.pdf * emitterDPDF[sample]);
     }
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
@@ -133,8 +115,7 @@ class Whitted : public Integrator {
     std::string toString() const { return "WhittedIntegrator[]"; }
 
    private:
-    // std::vector<const Mesh *> emitters = {};
-    // DiscretePDF dpdf;
+    DiscretePDF emitterDPDF;
 };
 
 NORI_REGISTER_CLASS(Whitted, "whitted");

@@ -30,7 +30,7 @@ NORI_NAMESPACE_BEGIN
  * are mostly used by the \ref Integrator implementations.
  */
 class Scene : public NoriObject {
-public:
+   public:
     /// Construct a new scene object
     Scene(const PropertyList &);
 
@@ -57,6 +57,8 @@ public:
 
     /// Return a reference to an array containing all meshes
     const std::vector<Mesh *> &getMeshes() const { return m_meshes; }
+
+    const std::vector<Mesh *> &getEmitters() const { return m_emitters; }
 
     /**
      * \brief Intersect a ray against all triangles stored in the scene
@@ -116,8 +118,10 @@ public:
     std::string toString() const;
 
     EClassType getClassType() const { return EScene; }
-private:
+
+   private:
     std::vector<Mesh *> m_meshes;
+    std::vector<Mesh *> m_emitters;
     Integrator *m_integrator = nullptr;
     Sampler *m_sampler = nullptr;
     Camera *m_camera = nullptr;
