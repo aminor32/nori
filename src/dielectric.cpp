@@ -68,13 +68,14 @@ class Dielectric : public BSDF {
 
         if (sample.x() <= fresnel) {
             // reflection (in local frame)
-            bRec.wo = Vector3f(-bRec.wi.x(), -bRec.wi.y(), bRec.wi.z());
             bRec.eta = 1.0f;
+            bRec.wo = Vector3f(-bRec.wi.x(), -bRec.wi.y(), bRec.wi.z());
         } else {
             // refraction (in local frame)
-            bRec.wo = sinTheta_o * (-bRec.wi + cosTheta_i * n) / sinTheta_i -
-                      cosTheta_o * n;
-            bRec.eta = no / ni;
+            bRec.eta = ni / no;
+            bRec.wo = ((-bRec.wi) * bRec.eta +
+                       (bRec.eta * n.dot(bRec.wi) - cosTheta_o) * n)
+                          .normalized();
         }
 
         bRec.measure = EDiscrete;
