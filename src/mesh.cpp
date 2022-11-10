@@ -135,18 +135,13 @@ void Mesh::addChild(NoriObject *obj) {
     }
 }
 
-Sample Mesh::sampleMesh() const {
-    // sample triangle from generated pdf
-    std::random_device rd;
-    std::mt19937 rng(rd());
-    std::uniform_real_distribution<float> dist(0, 1);
-
+Sample Mesh::sampleMesh(Sampler *sampler) const {
     // value for barycentric coordinate
-    float zeta1 = dist(rng), zeta2 = dist(rng);
+    float zeta1 = sampler->next1D(), zeta2 = sampler->next1D();
     float alpha = 1 - std::sqrt(1 - zeta1), beta = zeta2 * std::sqrt(1 - zeta1);
 
     // sample face
-    uint32_t sampleFace = dpdf.sample(dist(rng));
+    uint32_t sampleFace = dpdf.sample(sampler->next1D());
     uint32_t idx0 = m_F(0, sampleFace), idx1 = m_F(1, sampleFace),
              idx2 = m_F(2, sampleFace);
 
@@ -162,13 +157,12 @@ Sample Mesh::sampleMesh() const {
 
         normal = alpha * n0 + beta * n1 + (1 - alpha - beta) * n2;
     } else if (m_emitter) {
-        // if vertex normal is not given & mesh is emitter
-        // we need to calculate normal to get geometric term
-        normal = (p1 - p0).cross(p2 - p1).normalized();
+        // if vertex normal is not given calculate face normal
+        normal = (p1 - p0).cross(p2 - p0);
     }
 
     // get pdf of the sampled face
-    float pdf = dpdf[sampleFace];
+    float pdf = 1 / dpdf.getSum();
 
     return Sample(samplePoint, normal.normalized(), pdf);
 }

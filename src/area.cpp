@@ -19,16 +19,11 @@ class AreaLight : public Emitter {
         return n.dot(wo) > 0 ? m_radiance : Color3f();
     }
 
-    Color3f sampleLe(const Mesh &mesh, Vector3f *wo) const {
+    Color3f sampleLe(Sampler *sampler, const Mesh &mesh, Vector3f *wo) const {
         Sample lightSample = mesh.sampleMesh();
 
-        std::random_device rd;
-        std::mt19937 rng(rd());
-        std::uniform_real_distribution<float> dist(0, 1);
-
         // sample wo in local frame
-        Point2f uSquareSample = Point2f(dist(rng), dist(rng));
-        Vector3f localWo = Warp::squareToCosineHemisphere(uSquareSample);
+        Vector3f localWo = Warp::squareToCosineHemisphere(sampler->next2D());
 
         Frame lightSampleFrame = Frame(lightSample.n);
         *wo = lightSampleFrame.toWorld(localWo);

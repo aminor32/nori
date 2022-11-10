@@ -27,13 +27,9 @@ class AOIntegrator : public Integrator {
             // sum
             Color3f l = Color3f();
 
-            std::random_device rd;
-            std::mt19937 rng(rd());
-            std::uniform_real_distribution<float> dist(0, 1);
-
             for (int i = 0; i < sampleNum; i++) {
-                Vector3f sample = Warp::squareToCosineHemisphere(
-                    Point2f(dist(rng), dist(rng)));
+                Vector3f sample =
+                    Warp::squareToCosineHemisphere(sampler->next2D());
                 Vector3f w = its.toWorld(sample);
                 float cosTheta = sample.z();
                 Ray3f shadowRay = Ray3f(x, w);

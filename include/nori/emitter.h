@@ -30,7 +30,8 @@ class Emitter : public NoriObject {
    public:
     virtual Color3f Le(Normal3f n, Vector3f wo) const = 0;
 
-    virtual Color3f sampleLe(const Mesh &mesh, Vector3f *wo) const = 0;
+    virtual Color3f sampleLe(Sampler *sampler, const Mesh &mesh,
+                             Vector3f *wo) const = 0;
 
     Color3f getRadiance() const { return m_radiance; }
 

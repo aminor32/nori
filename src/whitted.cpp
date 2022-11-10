@@ -2,6 +2,7 @@
 #include <nori/dpdf.h>
 #include <nori/emitter.h>
 #include <nori/integrator.h>
+#include <nori/sampler.h>
 #include <nori/scene.h>
 
 #include <random>
@@ -30,15 +31,10 @@ class Whitted : public Integrator {
         emitterDPDF.normalize();
     }
 
-    Color3f sampleIntegralBody(const Scene *scene, const Ray3f &ray,
-                               Intersection &its) const {
+    Color3f sampleIntegralBody(const Scene *scene, Sampler *sampler,
+                               const Ray3f &ray, Intersection &its) const {
         const std::vector<Mesh *> &emitters = scene->getEmitters();
-
-        // select random emitter
-        std::random_device rd;
-        std::mt19937 rng(rd());
-        std::uniform_real_distribution<float> dist(0, 1);
-        int sample = emitterDPDF.sample(dist(rng));
+        int sample = emitterDPDF.sample(sampler->next1D());
         const Mesh *emitter = emitters[sample];
 
         // sample from light source
@@ -58,12 +54,13 @@ class Whitted : public Integrator {
         float visibility = scene->rayIntersect(shadowRay) ? 0.f : 1.f;
         Color3f geometric =
             visibility *
-            std::abs((its.shFrame.cosTheta(its.toLocal(lightDir))) *
-                     lightSample.n.dot(lightDir)) /
+            std::abs(
+                (its.shFrame.cosTheta(its.toLocal(lightDir).normalized())) *
+                lightSample.n.dot(lightDir)) /
             d2;
 
         // calculate Le
-        Color3f Le = emitter->getEmitter()->Le(lightSample.n, -lightDir) / d2;
+        Color3f Le = emitter->getEmitter()->Le(lightSample.n, -lightDir);
 
         return fr * geometric * Le / lightSample.pdf;
     }
@@ -88,23 +85,20 @@ class Whitted : public Integrator {
 
                 // integral over light sources
                 for (int i = 0; i < SAMPLE_NUM; i++) {
-                    Lr += sampleIntegralBody(scene, ray, its);
+                    Lr += sampleIntegralBody(scene, sampler, ray, its);
                 }
 
                 return Le + Lr / SAMPLE_NUM;
             } else {
-                // specular
-                std::random_device rd;
-                std::mt19937 rng(rd());
-                std::uniform_real_distribution<float> dist(0, 1);
-                float zeta = dist(rng);
+                float zeta = sampler->next1D();
 
                 if (zeta < 0.95) {
                     BSDFQueryRecord bsdfQR =
                         BSDFQueryRecord(its.shFrame.toLocal(-ray.d));
-                    bsdf.sample(bsdfQR, Point2f(dist(rng), dist(rng)));
+                    Color3f samplingWeight =
+                        bsdf.sample(bsdfQR, sampler->next2D());
 
-                    return (1 / 0.95) *
+                    return (1 / 0.95) * samplingWeight *
                            Li(scene, sampler,
                               Ray3f(its.p, its.shFrame.toWorld(bsdfQR.wo)));
                 } else {

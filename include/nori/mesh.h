@@ -173,7 +173,7 @@ class Mesh : public NoriObject {
     const std::string &getName() const { return m_name; }
 
     // Return uniform sample on the surface
-    Sample sampleMesh() const;
+    Sample sampleMesh(Sampler *sampler) const;
 
     /// Return a human-readable summary of this instance
     std::string toString() const;
