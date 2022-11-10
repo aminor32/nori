@@ -20,7 +20,7 @@ class AreaLight : public Emitter {
     }
 
     Color3f sampleLe(Sampler *sampler, const Mesh &mesh, Vector3f *wo) const {
-        Sample lightSample = mesh.sampleMesh();
+        Sample lightSample = mesh.sampleMesh(sampler);
 
         // sample wo in local frame
         Vector3f localWo = Warp::squareToCosineHemisphere(sampler->next2D());

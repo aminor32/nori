@@ -76,7 +76,7 @@ class StudentsTTest : public NoriObject {
         for (auto angle : references) m_references.push_back(toFloat(angle));
 
         /* Number of BSDF samples that should be generated (default: 100K) */
-        m_sampleCount = propList.getInteger("sampleCount", 1000);
+        m_sampleCount = propList.getInteger("sampleCount", 10000);
     }
 
     virtual ~StudentsTTest() {

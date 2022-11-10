@@ -33,15 +33,16 @@ class Whitted : public Integrator {
 
     Color3f sampleIntegralBody(const Scene *scene, Sampler *sampler,
                                const Ray3f &ray, Intersection &its) const {
+        // sample emitter
         const std::vector<Mesh *> &emitters = scene->getEmitters();
-        int sample = emitterDPDF.sample(sampler->next1D());
-        const Mesh *emitter = emitters[sample];
+        int emitterIndex = emitterDPDF.sample(sampler->next1D());
+        const Mesh *emitter = emitters[emitterIndex];
+        float emitterPdf = emitterDPDF[emitterIndex] || 1;
 
-        // sample from light source
-        Sample lightSample = emitter->sampleMesh();
-        Vector3f lightDir = lightSample.p - its.p;
-        float d2 = lightDir.squaredNorm();
-        lightDir.normalize();
+        // sample a point on the light source
+        Sample lightSample = emitter->sampleMesh(sampler);
+        Vector3f lightDir = (lightSample.p - its.p).normalized();
+        float d2 = (lightSample.p - its.p).squaredNorm();
 
         const BSDF &bsdf = *(its.mesh->getBSDF());
         BSDFQueryRecord bsdfQR = BSDFQueryRecord(
@@ -62,7 +63,7 @@ class Whitted : public Integrator {
         // calculate Le
         Color3f Le = emitter->getEmitter()->Le(lightSample.n, -lightDir);
 
-        return fr * geometric * Le / lightSample.pdf;
+        return fr * geometric * Le / (lightSample.pdf * emitterPdf);
     }
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {

@@ -27,7 +27,7 @@ class SimpleIntegrator : public Integrator {
             // square of distance between ray origin and intersection point
             float cosTheta = n.dot(dir) / (n.norm() * dir.norm());
 
-            Ray3f shadowRay = Ray3f(x, dir.normalized());
+            Ray3f shadowRay = Ray3f(x, dir);
             shadowRay.maxt = dir.norm();
 
             if (scene->rayIntersect(shadowRay)) {
