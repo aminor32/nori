@@ -43,27 +43,29 @@ class Whitted : public Integrator {
 
         // sample from light source
         Sample lightSample = emitter->sampleMesh();
-        Vector3f light = lightSample.p - its.p;
+        Vector3f lightDir = lightSample.p - its.p;
+        float d2 = lightDir.squaredNorm();
+        lightDir.normalize();
 
         const BSDF &bsdf = *(its.mesh->getBSDF());
-        BSDFQueryRecord bsdfQR =
-            BSDFQueryRecord(its.toLocal(light).normalized(),
-                            its.toLocal(-ray.d).normalized(), ESolidAngle);
+        BSDFQueryRecord bsdfQR = BSDFQueryRecord(
+            its.toLocal(lightDir), its.toLocal(-ray.d), ESolidAngle);
         Color3f fr = bsdf.eval(bsdfQR);
 
         // calculate geometric terms
-        Ray3f shadowRay = Ray3f(its.p, light.normalized());
-        shadowRay.maxt = light.norm();
+        Ray3f shadowRay = Ray3f(its.p, lightDir);
+        shadowRay.maxt = std::sqrt(d2);
         float visibility = scene->rayIntersect(shadowRay) ? 0.f : 1.f;
         Color3f geometric =
             visibility *
-            std::abs((its.shFrame.n.dot(light)) * lightSample.n.dot(light)) /
-            light.squaredNorm();
+            std::abs((its.shFrame.cosTheta(its.toLocal(lightDir))) *
+                     lightSample.n.dot(lightDir)) /
+            d2;
 
-        return fr * geometric *
-               (std::abs(lightSample.n.dot(light.normalized())) *
-                emitter->getEmitter()->Le(*emitter) / light.squaredNorm()) /
-               (lightSample.pdf * emitterDPDF[sample]);
+        // calculate Le
+        Color3f Le = emitter->getEmitter()->Le(lightSample.n, -lightDir) / d2;
+
+        return fr * geometric * Le / lightSample.pdf;
     }
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
@@ -81,7 +83,7 @@ class Whitted : public Integrator {
 
                 // add Le if mesh is emitter
                 if (mesh.isEmitter()) {
-                    Le = mesh.getEmitter()->Le(mesh);
+                    Le = mesh.getEmitter()->getRadiance();
                 }
 
                 // integral over light sources

@@ -28,7 +28,11 @@ NORI_NAMESPACE_BEGIN
 
 class Emitter : public NoriObject {
    public:
-    virtual Color3f Le(const Mesh &mesh) const = 0;
+    virtual Color3f Le(Normal3f n, Vector3f wo) const = 0;
+
+    virtual Color3f sampleLe(const Mesh &mesh, Vector3f *wo) const = 0;
+
+    Color3f getRadiance() const { return m_radiance; }
 
     /**
      * \brief Return the type of object (i.e. Mesh/Emitter/etc.)
@@ -38,7 +42,7 @@ class Emitter : public NoriObject {
 
    protected:
     // radiance of the light source
-    Color3f radiance;
+    Color3f m_radiance;
 };
 
 NORI_NAMESPACE_END
