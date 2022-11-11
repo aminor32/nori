@@ -3,8 +3,8 @@
 
     <sampler type="independent">
         <!-- You might want to reduce this number during development -->
-        <integer name="sampleCount" value="4096"/>
-        <!-- <integer name="sampleCount" value="16"/> -->
+        <!-- <integer name="sampleCount" value="4096"/> -->
+        <integer name="sampleCount" value="4"/>
     </sampler>
 
     <camera type="perspective">

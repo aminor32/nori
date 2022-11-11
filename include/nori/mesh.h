@@ -18,22 +18,39 @@
 
 #pragma once
 
-#include <nori/object.h>
-#include <nori/frame.h>
 #include <nori/bbox.h>
+#include <nori/dpdf.h>
+#include <nori/frame.h>
+#include <nori/object.h>
 
 NORI_NAMESPACE_BEGIN
+
+struct Sample {
+    // default constructor
+    Sample() : p(Point3f()), n(Normal3f()), pdf(0) {}
+    // constructor
+    Sample(Point3f inputPoint, Normal3f inputNormal, float inputPDF)
+        : p(Point3f(inputPoint)), n(Normal3f(inputNormal)), pdf(inputPDF) {}
+
+    // sample point on the surface of the mesh
+    Point3f p;
+    // surface normal(per-vertex normals. if per-vertex normals are not
+    // provided, face normals.)
+    Normal3f n;
+    // pdf of the sample
+    float pdf;
+};
 
 /**
  * \brief Intersection data structure
  *
- * This data structure records local information about a ray-triangle intersection.
- * This includes the position, traveled ray distance, uv coordinates, as well
- * as well as two local coordinate frames (one that corresponds to the true
- * geometry, and one that is used for shading computations).
+ * This data structure records local information about a ray-triangle
+ * intersection. This includes the position, traveled ray distance, uv
+ * coordinates, as well as well as two local coordinate frames (one that
+ * corresponds to the true geometry, and one that is used for shading
+ * computations).
  */
-struct Intersection
-{
+struct Intersection {
     /// Position of the surface intersection
     Point3f p;
     /// Unoccluded distance along the ray
@@ -51,16 +68,10 @@ struct Intersection
     Intersection() : mesh(nullptr) {}
 
     /// Transform a direction vector into the local shading frame
-    Vector3f toLocal(const Vector3f &d) const
-    {
-        return shFrame.toLocal(d);
-    }
+    Vector3f toLocal(const Vector3f &d) const { return shFrame.toLocal(d); }
 
     /// Transform a direction vector from local to world coordinates
-    Vector3f toWorld(const Vector3f &d) const
-    {
-        return shFrame.toWorld(d);
-    }
+    Vector3f toWorld(const Vector3f &d) const { return shFrame.toWorld(d); }
 
     /// Return a human-readable summary of the intersection record
     std::string toString() const;
@@ -74,9 +85,8 @@ struct Intersection
  * the specifics of how to create its contents (e.g. by loading from an
  * external file)
  */
-class Mesh : public NoriObject
-{
-public:
+class Mesh : public NoriObject {
+   public:
     /// Release all memory
     virtual ~Mesh();
 
@@ -126,7 +136,8 @@ public:
      * \return
      *   \c true if an intersection has been detected
      */
-    bool rayIntersect(uint32_t index, const Ray3f &ray, float &u, float &v, float &t) const;
+    bool rayIntersect(uint32_t index, const Ray3f &ray, float &u, float &v,
+                      float &t) const;
 
     /// Return a pointer to the vertex positions
     const MatrixXf &getVertexPositions() const { return m_V; }
@@ -134,7 +145,8 @@ public:
     /// Return a pointer to the vertex normals (or \c nullptr if there are none)
     const MatrixXf &getVertexNormals() const { return m_N; }
 
-    /// Return a pointer to the texture coordinates (or \c nullptr if there are none)
+    /// Return a pointer to the texture coordinates (or \c nullptr if there are
+    /// none)
     const MatrixXf &getVertexTexCoords() const { return m_UV; }
 
     /// Return a pointer to the triangle vertex index list
@@ -152,11 +164,16 @@ public:
     /// Return a pointer to the BSDF associated with this mesh
     const BSDF *getBSDF() const { return m_bsdf; }
 
+    const DiscretePDF getDiscretePDF() const { return dpdf; }
+
     /// Register a child object (e.g. a BSDF) with the mesh
     virtual void addChild(NoriObject *child);
 
     /// Return the name of this mesh
     const std::string &getName() const { return m_name; }
+
+    // Return uniform sample on the surface
+    Sample sampleMesh(Sampler *sampler) const;
 
     /// Return a human-readable summary of this instance
     std::string toString() const;
@@ -167,19 +184,20 @@ public:
      * */
     EClassType getClassType() const { return EMesh; }
 
-protected:
+   protected:
     /// Create an empty mesh
     Mesh();
 
-protected:
-    std::string m_name;           ///< Identifying name
-    MatrixXf m_V;                 ///< Vertex positions
-    MatrixXf m_N;                 ///< Vertex normals
-    MatrixXf m_UV;                ///< Vertex texture coordinates
-    MatrixXu m_F;                 ///< Faces
-    BSDF *m_bsdf = nullptr;       ///< BSDF of the surface
-    Emitter *m_emitter = nullptr; ///< Associated emitter, if any
-    BoundingBox3f m_bbox;         ///< Bounding box of the mesh
+   protected:
+    std::string m_name;            ///< Identifying name
+    MatrixXf m_V;                  ///< Vertex positions
+    MatrixXf m_N;                  ///< Vertex normals
+    MatrixXf m_UV;                 ///< Vertex texture coordinates
+    MatrixXu m_F;                  ///< Faces
+    BSDF *m_bsdf = nullptr;        ///< BSDF of the surface
+    Emitter *m_emitter = nullptr;  ///< Associated emitter, if any
+    BoundingBox3f m_bbox;          ///< Bounding box of the mesh
+    DiscretePDF dpdf;  ///< Discrete probability density function of mesh
 };
 
 NORI_NAMESPACE_END

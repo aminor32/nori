@@ -98,9 +98,9 @@ class Accel {
                       bool shadowRay) const;
 
    private:
-    Mesh *m_mesh = nullptr;        ///< Mesh (only a single one for now)
-    BoundingBox3f m_bbox;          ///< Bounding box of the entire scene
-    OctreeNode *m_root = nullptr;  ///< Root of acceleration data model
+    std::vector<Mesh *> m_mesh = {};  ///< Mesh (only a single one for now)
+    BoundingBox3f m_bbox;             ///< Bounding box of the entire scene
+    std::vector<OctreeNode *> m_root = {};  ///< Root of acceleration data model
 };
 
 NORI_NAMESPACE_END

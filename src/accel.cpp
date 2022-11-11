@@ -109,22 +109,26 @@ std::string OctreeNode::toString() {
 }
 
 void Accel::addMesh(Mesh *mesh) {
-    if (m_mesh) throw NoriException("Accel: only a single mesh is supported!");
-    m_mesh = mesh;
-    m_bbox = m_mesh->getBoundingBox();
+    m_mesh.push_back(mesh);
+    m_bbox.expandBy(mesh->getBoundingBox());
 }
 
 /* returns reference of root of Octree */
 void Accel::build() {
-    BoundingBox3f meshBoundingBox = m_mesh->getBoundingBox();
-    uint32_t triangleNum = m_mesh->getTriangleCount();
-    std::vector<uint32_t> totalTriangles;
+    for (std::vector<Mesh *>::iterator it = m_mesh.begin(); it < m_mesh.end();
+         it++) {
+        Mesh *mesh = *it;
+        BoundingBox3f meshBoundingBox = mesh->getBoundingBox();
+        uint32_t triangleNum = mesh->getTriangleCount();
+        std::vector<uint32_t> totalTriangles;
 
-    for (uint32_t i = 0; i < triangleNum; ++i) {
-        totalTriangles.push_back(i);
+        for (uint32_t i = 0; i < triangleNum; ++i) {
+            totalTriangles.push_back(i);
+        }
+
+        m_root.push_back(
+            new OctreeNode(mesh, 0, meshBoundingBox, totalTriangles));
     }
-
-    m_root = new OctreeNode(m_mesh, 0, meshBoundingBox, totalTriangles);
 
     std::cout << "Octree build done" << std::endl;
 
@@ -163,10 +167,10 @@ void Accel::traverseOctree(OctreeNode *node, Ray3f &ray, Intersection &its,
              triIt != node->triangles.end(); triIt++) {
             float u, v, t;
 
-            if (m_mesh->rayIntersect(*triIt, ray, u, v, t)) {
+            if (node->mesh->rayIntersect(*triIt, ray, u, v, t)) {
                 ray.maxt = its.t = t;
                 its.uv = Point2f(u, v);
-                its.mesh = m_mesh;
+                its.mesh = node->mesh;
                 f = *triIt;
                 foundIntersection = true;
 
@@ -185,8 +189,11 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its,
     Ray3f ray(ray_);  /// Make a copy of the ray (we will need to update its
                       /// '.maxt' value)
 
-    // traverse through bounding boxes
-    traverseOctree(m_root, ray, its, shadowRay, foundIntersection, f);
+    // traverse through meshes
+    for (std::vector<OctreeNode *>::const_iterator it = m_root.begin();
+         it < m_root.end(); it++) {
+        traverseOctree(*it, ray, its, shadowRay, foundIntersection, f);
+    }
 
     if (foundIntersection) {
         /* At this point, we now know that there is an intersection,

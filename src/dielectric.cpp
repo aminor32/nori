@@ -17,13 +17,15 @@
 */
 
 #include <nori/bsdf.h>
+#include <nori/common.h>
 #include <nori/frame.h>
+#include <nori/warp.h>
 
 NORI_NAMESPACE_BEGIN
 
 /// Ideal dielectric BSDF
 class Dielectric : public BSDF {
-public:
+   public:
     Dielectric(const PropertyList &propList) {
         /* Interior IOR (default: BK7 borosilicate optical glass) */
         m_intIOR = propList.getFloat("intIOR", 1.5046f);
@@ -43,7 +45,42 @@ public:
     }
 
     Color3f sample(BSDFQueryRecord &bRec, const Point2f &sample) const {
-        throw NoriException("Unimplemented!");
+        Vector3f n;
+        float ni, no;
+        float sinTheta_i = Frame::sinTheta(bRec.wi);
+        float cosTheta_i = Frame::cosTheta(bRec.wi);
+
+        if (cosTheta_i > 0) {
+            // from outside to inside of the mesh
+            n = Vector3f(0, 0, 1);
+            ni = m_extIOR;
+            no = m_intIOR;
+        } else {
+            // from inside to outside of the mesh
+            n = Vector3f(0, 0, -1);
+            ni = m_intIOR;
+            no = m_extIOR;
+        }
+
+        float sinTheta_o = ni * sinTheta_i / no;
+        float cosTheta_o = std::sqrt(1 - sinTheta_o * sinTheta_o);
+        float fresnel = nori::fresnel(std::abs(cosTheta_i), ni, no);
+
+        if (sample.x() <= fresnel) {
+            // reflection (in local frame)
+            bRec.eta = 1.0f;
+            bRec.wo = Vector3f(-bRec.wi.x(), -bRec.wi.y(), bRec.wi.z());
+        } else {
+            // refraction (in local frame)
+            bRec.eta = ni / no;
+            bRec.wo = ((-bRec.wi) * bRec.eta +
+                       (bRec.eta * n.dot(bRec.wi) - cosTheta_o) * n)
+                          .normalized();
+        }
+
+        bRec.measure = EDiscrete;
+
+        return Color3f(1.f);
     }
 
     std::string toString() const {
@@ -54,7 +91,8 @@ public:
             "]",
             m_intIOR, m_extIOR);
     }
-private:
+
+   private:
     float m_intIOR, m_extIOR;
 };
 
