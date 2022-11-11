@@ -51,7 +51,7 @@ class Whitted : public Integrator {
 
         // calculate geometric terms
         Ray3f shadowRay = Ray3f(its.p, lightDir);
-        shadowRay.maxt = std::sqrt(d2);
+        shadowRay.maxt = std::sqrt(d2) - Epsilon;
         float visibility = scene->rayIntersect(shadowRay) ? 0.f : 1.f;
         Color3f geometric =
             visibility *
