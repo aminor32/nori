@@ -51,7 +51,7 @@ class Microfacet : public BSDF {
     }
 
     float G1(Vector3f wv, Vector3f wh) const {
-        int chiPlus = (wv.dot(wh) / Frame::cosTheta(wv)) > 0;
+        int chiPlus = wv.dot(wh) / Frame::cosTheta(wv) > 0 ? 1 : 0;
         float b = 1 / (m_alpha * Frame::tanTheta(wv));
         float b2 = b * b;
 
@@ -85,35 +85,41 @@ class Microfacet : public BSDF {
 
         Vector3f wh = (bRec.wi + bRec.wo).normalized();
         float d = Warp::squareToBeckmannPdf(wh, m_alpha);
-        float j = 1 / (4 * std::abs(wh.dot(bRec.wo)));
+        float j = 1 / (4 * wh.dot(bRec.wo));
 
         return m_ks * d * j + (1 - m_ks) * Frame::cosTheta(bRec.wo) * INV_PI;
     }
 
     /// Sample the BRDF
     Color3f sample(BSDFQueryRecord &bRec, const Point2f &_sample) const {
-        std::random_device rd;
-        std::mt19937 rng(rd());
-        std::uniform_real_distribution<float> dist(0, 1);
-        Point2f sample = (dist(rng), dist(rng));
+        if (Frame::cosTheta(bRec.wi) <= 0) return Color3f(0.0f);
 
         if (_sample.x() < m_ks) {
             // specular
+            Point2f sample = Point2f(_sample.x() / m_ks, _sample.y());
             Normal3f wh = Warp::squareToBeckmann(sample, m_alpha);
 
             bRec.measure = ESolidAngle;
             bRec.wo = (2 * wh.dot(bRec.wi) * wh - bRec.wi).normalized();
         } else {
             // diffuse
+            Point2f sample =
+                Point2f((_sample.x() - m_ks) / (1 - m_ks), _sample.y());
+
             bRec.measure = ESolidAngle;
             bRec.wo = Warp::squareToCosineHemisphere(sample);
         }
 
-        // Note: Once you have implemented the part that computes the scattered
-        // direction, the last part of this function should simply return the
-        // BRDF value divided by the solid angle density and multiplied by the
-        // cosine factor from the reflection equation, i.e.
-        return eval(bRec) * Frame::cosTheta(bRec.wo) / pdf(bRec);
+        if (Frame::cosTheta(bRec.wo) <= 0) {
+            return Color3f();
+        } else {
+            // Note: Once you have implemented the part that computes the
+            // scattered direction, the last part of this function should simply
+            // return the BRDF value divided by the solid angle density and
+            // multiplied by the cosine factor from the reflection equation,
+            // i.e.
+            return eval(bRec) * Frame::cosTheta(bRec.wo) / pdf(bRec);
+        }
     }
 
     bool isDiffuse() const {
