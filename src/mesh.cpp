@@ -25,7 +25,6 @@
 
 #include <Eigen/Geometry>
 #include <cmath>
-#include <random>
 #include <string>
 
 NORI_NAMESPACE_BEGIN

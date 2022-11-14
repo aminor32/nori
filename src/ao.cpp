@@ -3,8 +3,6 @@
 #include <nori/scene.h>
 #include <nori/warp.h>
 
-#include <random>
-
 NORI_NAMESPACE_BEGIN
 
 // Ambient Occlusion Integrator

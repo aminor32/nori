@@ -5,7 +5,6 @@
 #include <nori/sampler.h>
 #include <nori/scene.h>
 
-#include <random>
 #include <vector>
 
 #define SAMPLE_NUM 10

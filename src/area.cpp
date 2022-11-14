@@ -5,7 +5,6 @@
 #include <nori/warp.h>
 
 #include <cmath>
-#include <random>
 
 NORI_NAMESPACE_BEGIN
 
