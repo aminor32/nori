@@ -44,8 +44,11 @@ class Whitted : public Integrator {
         float d2 = (lightSample.p - its.p).squaredNorm();
 
         const BSDF &bsdf = *(its.mesh->getBSDF());
-        BSDFQueryRecord bsdfQR = BSDFQueryRecord(
-            its.toLocal(lightDir), its.toLocal(-ray.d), ESolidAngle);
+        BSDFQueryRecord bsdfQR = BSDFQueryRecord(its.toLocal(lightDir));
+
+        // sample to get measure of BSDF
+        bsdf.sample(bsdfQR, sampler->next2D());
+        bsdfQR.wo = its.toLocal(-ray.d);
         Color3f fr = bsdf.eval(bsdfQR);
 
         // calculate geometric terms

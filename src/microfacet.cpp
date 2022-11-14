@@ -99,6 +99,7 @@ class Microfacet : public BSDF {
             Point2f sample = Point2f(_sample.x() / m_ks, _sample.y());
             Normal3f wh = Warp::squareToBeckmann(sample, m_alpha);
 
+            bRec.eta = 1.f;
             bRec.measure = ESolidAngle;
             bRec.wo = (2 * wh.dot(bRec.wi) * wh - bRec.wi).normalized();
         } else {
@@ -106,6 +107,7 @@ class Microfacet : public BSDF {
             Point2f sample =
                 Point2f((_sample.x() - m_ks) / (1 - m_ks), _sample.y());
 
+            bRec.eta = 1.f;
             bRec.measure = ESolidAngle;
             bRec.wo = Warp::squareToCosineHemisphere(sample);
         }
