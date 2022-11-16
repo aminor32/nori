@@ -46,9 +46,11 @@ class PathMats : public Integrator {
             }
 
             float zeta = sampler->next1D();
+            float throughput = 1.f;
             float eta = 1.f;
 
-            for (int i = 0; i < 3 || zeta < std::min<float>(eta * eta, 0.99);
+            for (int i = 0;
+                 i < 3 || zeta < std::min<float>(throughput * eta * eta, 0.99);
                  i++) {
                 const Mesh &mesh = *(its.mesh);
                 const BSDF &bsdf = *(mesh.getBSDF());
@@ -68,37 +70,38 @@ class PathMats : public Integrator {
 
                     break;
                 } else if (shadowIts.mesh->isEmitter()) {
-                    Lr *= shadowIts.mesh->getEmitter()->Le(shadowIts.shFrame.n,
-                                                           -bsdfQR.wo);
+                    Lr *= shadowIts.mesh->getEmitter()->Le(
+                        shadowIts.shFrame.n,
+                        its.toWorld(-bsdfQR.wo).normalized());
 
                     break;
                 } else {
                     Color3f fr = bsdf.eval(bsdfQR);
-
                     // calculate geometric terms
                     Vector3f dir = its.toWorld(bsdfQR.wo).normalized();
                     float d2 = (shadowIts.p - its.p).squaredNorm();
-
                     Color3f geometric =
-                        std::abs(shadowIts.shFrame.cosTheta(
-                            shadowIts.toLocal(dir).normalized())) /
+                        std::abs(its.shFrame.cosTheta(bsdfQR.wo) *
+                                 shadowIts.shFrame.cosTheta(
+                                     shadowIts.toLocal(dir).normalized())) /
                         d2;
 
-                    Lr *= (1 / eta) * samplingWeight * geometric;
+                    Lr *= samplingWeight * fr * geometric;
 
                     if (std::isinf(Lr.x())) {
-                        int j;
-
                         break;
                     }
-                }
 
-                                // update ray to shadow ray
-                _ray = Ray3f(its.p, bsdfQR.wo);
-                // update eta
-                eta *= bsdfQR.eta;
-                // sample zeta
-                zeta = sampler->next1D();
+                    // update ray to shadow ray
+                    _ray = Ray3f(its.p, bsdfQR.wo);
+                    // update throughput
+                    throughput = std::max<float>(throughput,
+                                                 (fr * geometric).maxCoeff());
+                    // update eta
+                    eta *= bsdfQR.eta;
+                    // sample zeta
+                    zeta = sampler->next1D();
+                }
             }
 
             return Le + Lr;
