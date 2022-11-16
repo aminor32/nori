@@ -5,6 +5,7 @@
 #include <nori/sampler.h>
 #include <nori/scene.h>
 
+#include <cmath>
 #include <vector>
 
 #define SAMPLE_NUM 10
@@ -36,48 +37,63 @@ class PathMats : public Integrator {
         if (!scene->rayIntersect(ray, its)) {
             return Color3f();
         } else {
-            Color3f Le = Color3f(), Lr = Color3f();
+            Color3f Le = Color3f(), Lr = Color3f(1.f);
             Ray3f _ray = Ray3f(ray);
+
+            // add Le if mesh is emitter
+            if (its.mesh->isEmitter()) {
+                Le += its.mesh->getEmitter()->getRadiance();
+            }
 
             float zeta = sampler->next1D();
             float eta = 1.f;
 
-            for (int i = 0; i < 3 || zeta < eta; i++) {
-                // add Le if mesh is emitter
-                if (its.mesh->isEmitter()) {
-                    Le += its.mesh->getEmitter()->getRadiance();
-                    break;
-                }
-
+            for (int i = 0; i < 3 || zeta < std::min<float>(eta * eta, 0.99);
+                 i++) {
                 const Mesh &mesh = *(its.mesh);
                 const BSDF &bsdf = *(mesh.getBSDF());
-
                 BSDFQueryRecord bsdfQR =
                     BSDFQueryRecord(its.shFrame.toLocal(-ray.d));
+
+                // sample reflected direction on the material
                 Color3f samplingWeight = bsdf.sample(bsdfQR, sampler->next2D());
-                Color3f fr = bsdf.eval(bsdfQR);
 
                 // generate shadow ray
-                Ray3f shadowRay = Ray3f(its.p, bsdfQR.wo);
+                Ray3f shadowRay =
+                    Ray3f(its.p, its.toWorld(bsdfQR.wo).normalized());
                 Intersection shadowIts;
 
                 if (!scene->rayIntersect(shadowRay, shadowIts)) {
+                    Lr = Color3f();
+
+                    break;
+                } else if (shadowIts.mesh->isEmitter()) {
+                    Lr *= shadowIts.mesh->getEmitter()->Le(shadowIts.shFrame.n,
+                                                           -bsdfQR.wo);
+
                     break;
                 } else {
+                    Color3f fr = bsdf.eval(bsdfQR);
+
                     // calculate geometric terms
-                    Vector3f dir = (shadowIts.p - its.p).normalized();
+                    Vector3f dir = its.toWorld(bsdfQR.wo).normalized();
                     float d2 = (shadowIts.p - its.p).squaredNorm();
 
                     Color3f geometric =
-                        std::abs((its.shFrame.cosTheta(bsdfQR.wo)) *
-                                 shadowIts.shFrame.cosTheta(
-                                     shadowIts.toLocal(dir).normalized())) /
+                        std::abs(shadowIts.shFrame.cosTheta(
+                            shadowIts.toLocal(dir).normalized())) /
                         d2;
 
-                    Lr += (1 / eta) * samplingWeight * fr * geometric;
+                    Lr *= (1 / eta) * samplingWeight * geometric;
+
+                    if (std::isinf(Lr.x())) {
+                        int j;
+
+                        break;
+                    }
                 }
 
-                // update ray to shadow ray
+                                // update ray to shadow ray
                 _ray = Ray3f(its.p, bsdfQR.wo);
                 // update eta
                 eta *= bsdfQR.eta;
