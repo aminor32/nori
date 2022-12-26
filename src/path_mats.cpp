@@ -34,8 +34,8 @@ class PathMats : public Integrator {
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
         Intersection its;
         Color3f L(0.f);
-        Color3f fr(1.f);
-        Ray3f _ray = Ray3f(ray);
+        Color3f throughput(1.f);
+        Ray3f _ray(ray);
 
         for (int depth = 0; depth < MAX_DEPTH; depth++) {
             // terminate: no intersection between scene and ray
@@ -47,30 +47,30 @@ class PathMats : public Integrator {
             const BSDF &bsdf = *(mesh.getBSDF());
 
             if (mesh.isEmitter()) {
-                L += fr * mesh.getEmitter()->getRadiance();
-                break;
+                L += throughput * mesh.getEmitter()->getRadiance();
             }
 
             // sample reflected direction on the material
-            BSDFQueryRecord bsdfQR =
-                BSDFQueryRecord(its.shFrame.toLocal(-_ray.d).normalized());
-            fr *= bsdf.sample(bsdfQR, sampler->next2D());
+            BSDFQueryRecord bsdfQR(its.shFrame.toLocal(-_ray.d).normalized());
+            throughput *= bsdf.sample(bsdfQR, sampler->next2D());
 
-            // update ray
+            // update _ray
             _ray = Ray3f(its.p, its.toWorld(bsdfQR.wo).normalized());
 
-            // Russian roulette
+            // terminate: Russian roulette
             if (depth > 3) {
-                float probability = std::min<float>(fr.maxCoeff(), 0.99);
+                float probability =
+                    std::min<float>(throughput.maxCoeff(), 0.99);
                 float zeta = sampler->next1D();
 
                 if (zeta > probability) {
                     break;
                 } else {
-                    fr /= probability;
+                    throughput /= probability;
                 }
             }
         }
+
         return L;
     }
 

@@ -7,13 +7,13 @@
 
 #include <vector>
 
-#define MAX_DEPTH 20
+#define MAX_DEPTH 10
 
 NORI_NAMESPACE_BEGIN
 
-class PathEms : public Integrator {
+class PathMis : public Integrator {
    public:
-    PathEms(const PropertyList &props) {
+    PathMis(const PropertyList &props) {
         // no arguments needed
     }
 
@@ -32,10 +32,9 @@ class PathEms : public Integrator {
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
         Intersection its;
-        Color3f L(0.f);
+        Color3f Lems(0.f), Lmats(0.f);
         Color3f throughput(1.f);
         Ray3f _ray(ray);
-        Color3f lastL(0.f);
 
         for (int depth = 0; depth < MAX_DEPTH; depth++) {
             // terminate: no intersection between scene and ray
@@ -45,10 +44,6 @@ class PathEms : public Integrator {
 
             const Mesh &mesh = *(its.mesh);
             const BSDF &bsdf = *(mesh.getBSDF());
-
-            if (mesh.isEmitter()) {
-                L += mesh.getEmitter()->getRadiance();
-            }
 
             // sample emitter
             const std::vector<Mesh *> &emitters = scene->getEmitters();
@@ -61,10 +56,19 @@ class PathEms : public Integrator {
             Vector3f lightDir = (lightSample.p - its.p).normalized();
             float d2 = (lightSample.p - its.p).squaredNorm();
 
+            if (mesh.isEmitter()) {
+                Lems += mesh.getEmitter()->getRadiance();
+                Lmats += throughput * mesh.getEmitter()->getRadiance();
+            }
+
             if (bsdf.isDiffuse()) {
                 BSDFQueryRecord bsdfQR(its.toLocal(lightDir).normalized(),
-                                       its.toLocal(-_ray.d).normalized(),
+                                       its.toLocal(-ray.d).normalized(),
                                        ESolidAngle);
+                Color3f fr = bsdf.eval(bsdfQR);
+                float pBRDF = bsdf.pdf(bsdfQR);
+
+                float wLight = pEmitter / (pEmitter + pBRDF);
 
                 // calculate geometric term
                 Ray3f shadowRay(its.p, lightDir);
@@ -77,17 +81,51 @@ class PathEms : public Integrator {
                              lightSample.n.dot(lightDir)) /
                     d2;
 
-                Color3f fr = bsdf.eval(bsdfQR);
+                // calculate Le and update L
                 Color3f Le =
                     emitter->getEmitter()->Le(lightSample.n, -lightDir);
-
-                lastL = fr * geometric * Le / (lightSample.pdf * pEmitter);
-                L += fr * geometric * Le / (lightSample.pdf * pEmitter);
+                Lems += wLight * throughput * fr * geometric * Le /
+                        (lightSample.pdf * pEmitter);
             }
 
             // sample reflected direction
             BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized());
             throughput *= bsdf.sample(bsdfQR, sampler->next2D());
+
+            // next event estimation
+            Intersection nextIts;
+            Ray3f nextRay(its.p, its.toWorld(bsdfQR.wo).normalized());
+            if (bsdf.isDiffuse() && scene->rayIntersect(nextRay, nextIts) &&
+                nextIts.mesh->isEmitter()) {
+                if (nextIts.mesh == emitter) {
+                    break;
+                }
+
+                float pBRDF = bsdf.pdf(bsdfQR);
+                float pLight;
+
+                int i;
+                for (i = 0; i < emitters.size(); i++) {
+                    if (nextIts.mesh == emitters[i]) {
+                        pLight = emitterDPDF[i];
+                        break;
+                    }
+                }
+
+                float wBRDF = pBRDF / (pBRDF + pLight);
+
+                // calculate geometric term
+                Color3f geometric =
+                    std::abs(its.shFrame.cosTheta(bsdfQR.wo) *
+                             nextIts.shFrame.cosTheta(
+                                 nextIts.toLocal(-bsdfQR.wo).normalized())) /
+                    (nextIts.t * nextIts.t);
+
+                Color3f fr = bsdf.eval(bsdfQR);
+                Color3f Le = emitter->getEmitter()->getRadiance();
+
+                Lmats += wBRDF * fr * geometric * Le;
+            }
 
             // update ray
             _ray = Ray3f(its.p, its.toWorld(bsdfQR.wo).normalized());
@@ -104,23 +142,16 @@ class PathEms : public Integrator {
                     throughput /= probability;
                 }
             }
-
-            // next event estimation
-            Intersection nextIts;
-            if (bsdf.isDiffuse() && scene->rayIntersect(_ray, nextIts) &&
-                nextIts.mesh == emitter) {
-                break;
-            }
         }
 
-        return L;
+        return Lmats + Lems;
     }
 
-    std::string toString() const { return "PathEmsIntegrator[]"; }
+    std::string toString() const { return "PathMisIntegrator[]"; }
 
    private:
     DiscretePDF emitterDPDF;
 };
 
-NORI_REGISTER_CLASS(PathEms, "path_ems");
+NORI_REGISTER_CLASS(PathMis, "path_mis");
 NORI_NAMESPACE_END
