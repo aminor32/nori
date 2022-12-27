@@ -32,10 +32,9 @@ class PathEms : public Integrator {
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
         Intersection its;
-        Color3f L(0.f);
+        Color3f L(0.f), Ld(0.f);
         Color3f throughput(1.f);
         Ray3f _ray(ray);
-        Color3f lastL(0.f);
 
         for (int depth = 0; depth < MAX_DEPTH; depth++) {
             // terminate: no intersection between scene and ray
@@ -46,7 +45,7 @@ class PathEms : public Integrator {
             const Mesh &mesh = *(its.mesh);
             const BSDF &bsdf = *(mesh.getBSDF());
 
-            if (mesh.isEmitter()) {
+            if (depth == 0 && mesh.isEmitter()) {
                 L += mesh.getEmitter()->getRadiance();
             }
 
@@ -81,16 +80,22 @@ class PathEms : public Integrator {
                 Color3f Le =
                     emitter->getEmitter()->Le(lightSample.n, -lightDir);
 
-                lastL = fr * geometric * Le / (lightSample.pdf * pEmitter);
-                L += fr * geometric * Le / (lightSample.pdf * pEmitter);
+                Ld = throughput * fr * geometric * Le /
+                     (lightSample.pdf * pEmitter);
+                L += Ld;
             }
 
-            // sample reflected direction
+            // sample reflected direction & update ray
             BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized());
             throughput *= bsdf.sample(bsdfQR, sampler->next2D());
-
-            // update ray
             _ray = Ray3f(its.p, its.toWorld(bsdfQR.wo).normalized());
+
+            // next event estimation
+            Intersection nextIts;
+            if (bsdf.isDiffuse() && scene->rayIntersect(_ray, nextIts) &&
+                nextIts.mesh == emitter) {
+                break;
+            }
 
             // Russian roulette
             if (depth > 3) {
@@ -103,13 +108,6 @@ class PathEms : public Integrator {
                 } else {
                     throughput /= probability;
                 }
-            }
-
-            // next event estimation
-            Intersection nextIts;
-            if (bsdf.isDiffuse() && scene->rayIntersect(_ray, nextIts) &&
-                nextIts.mesh == emitter) {
-                break;
             }
         }
 

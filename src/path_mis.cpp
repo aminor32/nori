@@ -32,7 +32,7 @@ class PathMis : public Integrator {
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
         Intersection its;
-        Color3f Lems(0.f), Lmats(0.f);
+        Color3f Lemit(0.f), Lems(0.f), Lmats(0.f), Ld(0.f);
         Color3f throughput(1.f);
         Ray3f _ray(ray);
 
@@ -56,19 +56,18 @@ class PathMis : public Integrator {
             Vector3f lightDir = (lightSample.p - its.p).normalized();
             float d2 = (lightSample.p - its.p).squaredNorm();
 
-            if (mesh.isEmitter()) {
-                Lems += mesh.getEmitter()->getRadiance();
-                Lmats += throughput * mesh.getEmitter()->getRadiance();
+            if (depth == 0 && mesh.isEmitter()) {
+                Lemit += mesh.getEmitter()->getRadiance();
             }
 
             if (bsdf.isDiffuse()) {
                 BSDFQueryRecord bsdfQR(its.toLocal(lightDir).normalized(),
-                                       its.toLocal(-ray.d).normalized(),
+                                       its.toLocal(-_ray.d).normalized(),
                                        ESolidAngle);
-                Color3f fr = bsdf.eval(bsdfQR);
-                float pBRDF = bsdf.pdf(bsdfQR);
 
-                float wLight = pEmitter / (pEmitter + pBRDF);
+                float pBRDF = bsdf.pdf(bsdfQR);
+                float wLight = pEmitter / (pEmitter + pBRDF),
+                      wBRDF = pBRDF / (pEmitter + pBRDF);
 
                 // calculate geometric term
                 Ray3f shadowRay(its.p, lightDir);
@@ -81,38 +80,44 @@ class PathMis : public Integrator {
                              lightSample.n.dot(lightDir)) /
                     d2;
 
-                // calculate Le and update L
+                Color3f fr = bsdf.eval(bsdfQR);
                 Color3f Le =
                     emitter->getEmitter()->Le(lightSample.n, -lightDir);
-                Lems += wLight * throughput * fr * geometric * Le /
-                        (lightSample.pdf * pEmitter);
+
+                Ld = wLight * throughput * fr * geometric * Le /
+                     (lightSample.pdf * pEmitter);
+                Lems += Ld;
             }
 
-            // sample reflected direction
+            // sample reflected direction & update ray
             BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized());
             throughput *= bsdf.sample(bsdfQR, sampler->next2D());
+            _ray = Ray3f(its.p, its.toWorld(bsdfQR.wo).normalized());
 
             // next event estimation
             Intersection nextIts;
             Ray3f nextRay(its.p, its.toWorld(bsdfQR.wo).normalized());
-            if (bsdf.isDiffuse() && scene->rayIntersect(nextRay, nextIts) &&
+            if (scene->rayIntersect(nextRay, nextIts) &&
                 nextIts.mesh->isEmitter()) {
+                const Mesh &nextMesh = *(nextIts.mesh);
+                const BSDF &nextBsdf = *(nextIts.mesh->getBSDF());
+
                 if (nextIts.mesh == emitter) {
-                    break;
+                    // if next mesh is current emitter, subtract emitter sampled
+                    // direct lighting
+                    Lems -= Ld;
                 }
 
-                float pBRDF = bsdf.pdf(bsdfQR);
-                float pLight;
+                // add direct lighting from next mesh
+                float wBRDF = 1.f;
 
-                int i;
-                for (i = 0; i < emitters.size(); i++) {
-                    if (nextIts.mesh == emitters[i]) {
-                        pLight = emitterDPDF[i];
-                        break;
-                    }
+                if (nextBsdf.isDiffuse()) {
+                    float pLight = 1 / (emitters.size() *
+                                        nextMesh.getDiscretePDF().getSum());
+                    float pBRDF = bsdf.pdf(bsdfQR);
+
+                    wBRDF = pBRDF / (pBRDF + pLight);
                 }
-
-                float wBRDF = pBRDF / (pBRDF + pLight);
 
                 // calculate geometric term
                 Color3f geometric =
@@ -124,11 +129,8 @@ class PathMis : public Integrator {
                 Color3f fr = bsdf.eval(bsdfQR);
                 Color3f Le = emitter->getEmitter()->getRadiance();
 
-                Lmats += wBRDF * fr * geometric * Le;
+                Lmats += wBRDF * throughput * fr * geometric * Le;
             }
-
-            // update ray
-            _ray = Ray3f(its.p, its.toWorld(bsdfQR.wo).normalized());
 
             // Russian roulette
             if (depth > 3) {
@@ -144,7 +146,7 @@ class PathMis : public Integrator {
             }
         }
 
-        return Lmats + Lems;
+        return Lemit + Lmats + Lems;
     }
 
     std::string toString() const { return "PathMisIntegrator[]"; }
