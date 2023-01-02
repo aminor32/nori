@@ -136,14 +136,14 @@ Vector3f Warp::squareToBeckmann(const Point2f &sample, float alpha) {
 
 float Warp::squareToBeckmannPdf(const Vector3f &m, float alpha) {
     float alpha2 = alpha * alpha;
-    float tanTheta2 = (m.x() * m.x() + m.y() * m.y()) / (m.z() * m.z());
-    float cosTheta3 = m.z() * m.z() * m.z();
+    float tanTheta = Frame::tanTheta(m);
+    float cosTheta = Frame::cosTheta(m);
 
-    if (m.z() <= 0) {
+    if (cosTheta <= 0) {
         return 0;
     } else {
-        return (1 / (2 * M_PI)) * (2 * std::exp(-tanTheta2 / alpha2)) /
-               (alpha2 * cosTheta3);
+        return (0.5 * INV_PI) * (2 * std::exp(-tanTheta * tanTheta / alpha2)) /
+               (alpha2 * std::pow(cosTheta, 3));
     }
 }
 
