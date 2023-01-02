@@ -33,10 +33,10 @@ class PathEms : public Integrator {
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
         Intersection its;
-        Color3f Le(0.f), Ld(0.f);
+        Color3f Le(0.f), Ld(0.f), direct(0.f);
         Color3f throughput(1.f);
         Ray3f _ray(ray);
-        bool isEms = false;
+        bool ems = false;
 
         for (int depth = 0; depth < MAX_DEPTH; depth++) {
             // terminate: no intersection between scene and ray
@@ -50,7 +50,7 @@ class PathEms : public Integrator {
             if (mesh.isEmitter()) {
                 if (depth == 0) {
                     Le += mesh.getEmitter()->getRadiance();
-                } else if (!isEms) {
+                } else if (!ems) {
                     Le += throughput * mesh.getEmitter()->getRadiance();
                 }
             }
@@ -66,7 +66,7 @@ class PathEms : public Integrator {
             Vector3f lightDir = (lightSample.p - its.p).normalized();
             float d2 = (lightSample.p - its.p).squaredNorm();
 
-            isEms = false;
+            ems = false;
 
             if (bsdf.isDiffuse()) {
                 BSDFQueryRecord bsdfQR(its.toLocal(lightDir).normalized(),
@@ -88,9 +88,7 @@ class PathEms : public Integrator {
                 Ld += throughput * fr * geometric * l /
                       (pEmitter * lightSample.pdf);
 
-                if (visibility) {
-                    isEms = true;
-                }
+                ems = true;
             }
 
             // Russian roulette

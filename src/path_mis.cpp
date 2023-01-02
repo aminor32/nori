@@ -65,7 +65,7 @@ class PathMis : public Integrator {
                                        its.toLocal(-_ray.d).normalized(),
                                        ESolidAngle);
 
-                // change pdf w.r.t solid angle -> area
+                // calculate w_light
                 float pLight = std::abs(lightSample.n.dot(-_ray.d)) > Epsilon
                                    ? pEmitter * d2 /
                                          (emitter->getDiscretePDF().getSum() *
@@ -117,8 +117,8 @@ class PathMis : public Integrator {
 
             if (nextIts.mesh->isEmitter()) {
                 const Mesh &nextMesh = *(nextIts.mesh);
-                const BSDF &nextBsdf = *(nextIts.mesh->getBSDF());
 
+                // calculate w_brdf
                 float pBRDF = bsdf.pdf(bsdfQR),
                       pLight = pEmitter * (nextIts.p - its.p).squaredNorm() /
                                (nextMesh.getDiscretePDF().getSum() *
@@ -129,11 +129,11 @@ class PathMis : public Integrator {
                     wBRDF = pBRDF / (pLight + pBRDF);
                 }
 
-                Li += wBRDF * throughput * nextMesh.getEmitter()->getRadiance();
+                Ld += wBRDF * throughput * nextMesh.getEmitter()->getRadiance();
             }
         }
 
-        return Le + Ld + Li;
+        return Le + Ld;
     }
 
     std::string toString() const { return "PathMisIntegrator[]"; }
