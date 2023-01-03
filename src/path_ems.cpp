@@ -33,10 +33,10 @@ class PathEms : public Integrator {
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
         Intersection its;
-        Color3f Le(0.f), Ld(0.f), direct(0.f);
+        Color3f Le(0.f), Ld(0.f);
         Color3f throughput(1.f);
         Ray3f _ray(ray);
-        bool ems = false;
+        bool specular = false;
 
         for (int depth = 0; depth < MAX_DEPTH; depth++) {
             // terminate: no intersection between scene and ray
@@ -50,8 +50,8 @@ class PathEms : public Integrator {
             if (mesh.isEmitter()) {
                 if (depth == 0) {
                     Le += mesh.getEmitter()->getRadiance();
-                } else if (!ems) {
-                    Le += throughput * mesh.getEmitter()->getRadiance();
+                } else if (specular) {
+                    Ld += throughput * mesh.getEmitter()->getRadiance();
                 }
             }
 
@@ -65,8 +65,6 @@ class PathEms : public Integrator {
             Sample lightSample = emitter->sampleMesh(sampler);
             Vector3f lightDir = (lightSample.p - its.p).normalized();
             float d2 = (lightSample.p - its.p).squaredNorm();
-
-            ems = false;
 
             if (bsdf.isDiffuse()) {
                 BSDFQueryRecord bsdfQR(its.toLocal(lightDir).normalized(),
@@ -88,13 +86,20 @@ class PathEms : public Integrator {
                 Ld += throughput * fr * geometric * l /
                       (pEmitter * lightSample.pdf);
 
-                ems = true;
+                specular = false;
+            } else {
+                specular = true;
             }
+
+            // sample reflected direction & update ray
+            BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized());
+            throughput *= bsdf.sample(bsdfQR, sampler->next2D());
+            _ray = Ray3f(its.p, its.toWorld(bsdfQR.wo).normalized());
 
             // Russian roulette
             if (depth > 3) {
-                float probability =
-                    std::min<float>(throughput.maxCoeff(), 0.99);
+                float probability = std::min<float>(
+                    throughput.maxCoeff() * bsdfQR.eta * bsdfQR.eta, 0.99);
                 float zeta = sampler->next1D();
 
                 if (zeta > probability) {
@@ -103,11 +108,6 @@ class PathEms : public Integrator {
                     throughput /= probability;
                 }
             }
-
-            // sample reflected direction & update ray
-            BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized());
-            throughput *= bsdf.sample(bsdfQR, sampler->next2D());
-            _ray = Ray3f(its.p, its.toWorld(bsdfQR.wo).normalized());
         }
 
         return Le + Ld;

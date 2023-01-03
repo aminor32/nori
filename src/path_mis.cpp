@@ -35,6 +35,7 @@ class PathMis : public Integrator {
         Color3f Le(0.f), Ld(0.f), Li(0.f);
         Color3f throughput(1.f);
         Ray3f _ray(ray);
+        bool specular = false;
 
         for (int depth = 0; depth < MAX_DEPTH; depth++) {
             // terminate: no intersection between scene and ray
@@ -56,23 +57,29 @@ class PathMis : public Integrator {
             Vector3f lightDir = (lightSample.p - its.p).normalized();
             float d2 = (lightSample.p - its.p).squaredNorm();
 
-            if (depth == 0 && mesh.isEmitter()) {
-                Le += mesh.getEmitter()->getRadiance();
+            if (mesh.isEmitter()) {
+                if (depth == 0) {
+                    Le += mesh.getEmitter()->getRadiance();
+                } else if (specular) {
+                    Ld += throughput * mesh.getEmitter()->getRadiance();
+                }
             }
 
             if (bsdf.isDiffuse()) {
+                specular = false;
+
                 BSDFQueryRecord bsdfQR(its.toLocal(lightDir).normalized(),
                                        its.toLocal(-_ray.d).normalized(),
                                        ESolidAngle);
 
                 // calculate w_light
                 float pLight = std::abs(lightSample.n.dot(-_ray.d)) > Epsilon
-                                   ? pEmitter * d2 /
-                                         (emitter->getDiscretePDF().getSum() *
-                                          std::abs(lightSample.n.dot(-_ray.d)))
-                                   : Epsilon;
+                                   ? d2 / (emitter->getDiscretePDF().getSum() *
+                                           std::abs(lightSample.n.dot(-_ray.d)))
+                                   : 0.f;
                 float pBRDF = bsdf.pdf(bsdfQR);
-                float wLight = pLight / (pLight + pBRDF);
+                float wLight =
+                    pLight + pBRDF < Epsilon ? 0.f : pLight / (pLight + pBRDF);
 
                 // calculate geometric term
                 Ray3f shadowRay(its.p, lightDir);
@@ -88,6 +95,8 @@ class PathMis : public Integrator {
 
                 Ld += wLight * throughput * fr * geometric * l /
                       (pEmitter * lightSample.pdf);
+            } else {
+                specular = true;
             }
 
             // Russian roulette
@@ -129,7 +138,8 @@ class PathMis : public Integrator {
                     wBRDF = pBRDF / (pLight + pBRDF);
                 }
 
-                Ld += wBRDF * throughput * nextMesh.getEmitter()->getRadiance();
+                Ld += wBRDF * throughput *
+                      nextMesh.getEmitter()->Le(nextIts.shFrame.n, -_ray.d);
             }
         }
 
