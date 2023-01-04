@@ -24,7 +24,7 @@ class PathMis : public Integrator {
              it < emitters.end(); ++it) {
             const Mesh *emitter = *it;
 
-            emitterDPDF.append(emitter->getDiscretePDF().getSum());
+            emitterDPDF.append(1);
         }
 
         emitterDPDF.normalize();
@@ -46,17 +46,6 @@ class PathMis : public Integrator {
             const Mesh &mesh = *(its.mesh);
             const BSDF &bsdf = *(mesh.getBSDF());
 
-            // sample emitter
-            const std::vector<Mesh *> &emitters = scene->getEmitters();
-            int emitterIndex = emitterDPDF.sample(sampler->next1D());
-            const Mesh *emitter = emitters[emitterIndex];
-            float pEmitter = 1.f / emitters.size();
-
-            // sample a point on the emitter
-            Sample lightSample = emitter->sampleMesh(sampler);
-            Vector3f lightDir = (lightSample.p - its.p).normalized();
-            float d2 = (lightSample.p - its.p).squaredNorm();
-
             if (mesh.isEmitter()) {
                 if (depth == 0) {
                     Le += mesh.getEmitter()->getRadiance();
@@ -68,18 +57,29 @@ class PathMis : public Integrator {
             if (bsdf.isDiffuse()) {
                 specular = false;
 
+                // sample emitter
+                const std::vector<Mesh *> &emitters = scene->getEmitters();
+                int emitterIndex = emitterDPDF.sample(sampler->next1D());
+                const Mesh *emitter = emitters[emitterIndex];
+                float pEmitter = 1.f / emitters.size();
+
+                // sample a point on the emitter
+                Sample lightSample = emitter->sampleMesh(sampler);
+                Vector3f lightDir = (lightSample.p - its.p).normalized();
+                float d2 = (lightSample.p - its.p).squaredNorm();
                 BSDFQueryRecord bsdfQR(its.toLocal(lightDir).normalized(),
                                        its.toLocal(-_ray.d).normalized(),
                                        ESolidAngle);
 
                 // calculate w_light
-                float pLight = std::abs(lightSample.n.dot(-_ray.d)) > Epsilon
-                                   ? d2 / (emitter->getDiscretePDF().getSum() *
-                                           std::abs(lightSample.n.dot(-_ray.d)))
-                                   : 0.f;
+                float pLight = d2 / (emitter->getDiscretePDF().getSum() *
+                                     std::abs(lightSample.n.dot(-_ray.d)));
                 float pBRDF = bsdf.pdf(bsdfQR);
-                float wLight =
-                    pLight + pBRDF < Epsilon ? 0.f : pLight / (pLight + pBRDF);
+                float wLight = pLight / (pLight + pBRDF);
+
+                if (std::isnan(wLight)) {
+                    wLight = 0;
+                }
 
                 // calculate geometric term
                 Ray3f shadowRay(its.p, lightDir);
@@ -99,19 +99,6 @@ class PathMis : public Integrator {
                 specular = true;
             }
 
-            // Russian roulette
-            if (depth > 3) {
-                float probability =
-                    std::min<float>(throughput.maxCoeff(), 0.99);
-                float zeta = sampler->next1D();
-
-                if (zeta > probability) {
-                    break;
-                } else {
-                    throughput /= probability;
-                }
-            }
-
             // sample reflected direction & update ray
             BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized());
             throughput *= bsdf.sample(bsdfQR, sampler->next2D());
@@ -129,17 +116,34 @@ class PathMis : public Integrator {
 
                 // calculate w_brdf
                 float pBRDF = bsdf.pdf(bsdfQR),
-                      pLight = pEmitter * (nextIts.p - its.p).squaredNorm() /
+                      pLight = (nextIts.p - its.p).squaredNorm() /
                                (nextMesh.getDiscretePDF().getSum() *
                                 std::abs(nextIts.shFrame.n.dot(-_ray.d))),
                       wBRDF = 1.f;
 
                 if (bsdf.isDiffuse()) {
                     wBRDF = pBRDF / (pLight + pBRDF);
+
+                    if (std::isnan(wBRDF)) {
+                        wBRDF = 0;
+                    }
                 }
 
                 Ld += wBRDF * throughput *
                       nextMesh.getEmitter()->Le(nextIts.shFrame.n, -_ray.d);
+            }
+
+            // Russian roulette
+            if (depth > 3) {
+                float probability =
+                    std::min<float>(throughput.maxCoeff(), 0.99);
+                float zeta = sampler->next1D();
+
+                if (zeta > probability) {
+                    break;
+                } else {
+                    throughput /= probability;
+                }
             }
         }
 
