@@ -25,7 +25,7 @@ class PathEms : public Integrator {
              it < emitters.end(); ++it) {
             const Mesh *emitter = *it;
 
-            emitterDPDF.append(emitter->getDiscretePDF().getSum());
+            emitterDPDF.append(1.f);
         }
 
         emitterDPDF.normalize();
@@ -49,9 +49,10 @@ class PathEms : public Integrator {
 
             if (mesh.isEmitter()) {
                 if (depth == 0) {
-                    Le += mesh.getEmitter()->getRadiance();
+                    Le += mesh.getEmitter()->Le(its.shFrame.n, -_ray.d);
                 } else if (specular) {
-                    Ld += throughput * mesh.getEmitter()->getRadiance();
+                    Ld += throughput *
+                          mesh.getEmitter()->Le(its.shFrame.n, -_ray.d);
                 }
             }
 
@@ -67,6 +68,8 @@ class PathEms : public Integrator {
             float d2 = (lightSample.p - its.p).squaredNorm();
 
             if (bsdf.isDiffuse()) {
+                specular = false;
+
                 BSDFQueryRecord bsdfQR(its.toLocal(lightDir).normalized(),
                                        its.toLocal(-_ray.d).normalized(),
                                        ESolidAngle);
@@ -85,8 +88,6 @@ class PathEms : public Integrator {
 
                 Ld += throughput * fr * geometric * l /
                       (pEmitter * lightSample.pdf);
-
-                specular = false;
             } else {
                 specular = true;
             }
