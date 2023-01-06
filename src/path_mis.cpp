@@ -121,7 +121,7 @@ class PathMis : public Integrator {
                 float wBRDF = pBRDF / (pLightSolidAngle + pBRDF);
 
                 if (std::isnan(wBRDF)) {
-                    wBRDF = 1.f;
+                    wBRDF = 0.f;
                 }
 
                 if (bsdf.isDiffuse()) {
