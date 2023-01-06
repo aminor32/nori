@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#define MAX_DEPTH 10
+#define MAX_DEPTH 20
 
 NORI_NAMESPACE_BEGIN
 
@@ -20,10 +20,7 @@ class PathMis : public Integrator {
     void preprocess(const Scene *scene) {
         const std::vector<Mesh *> &emitters = scene->getEmitters();
 
-        for (std::vector<Mesh *>::const_iterator it = emitters.begin();
-             it < emitters.end(); ++it) {
-            const Mesh *emitter = *it;
-
+        for (int i = 0; i < emitters.size(); i++) {
             emitterDPDF.append(1);
         }
 
@@ -32,7 +29,7 @@ class PathMis : public Integrator {
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
         Intersection its;
-        Color3f Le(0.f), Ld(0.f), Li(0.f);
+        Color3f Le(0.f), Ld(0.f), tmp(0.f);
         Color3f throughput(1.f);
         Ray3f _ray(ray);
         bool specular = false;
@@ -48,20 +45,22 @@ class PathMis : public Integrator {
 
             if (mesh.isEmitter()) {
                 if (depth == 0) {
-                    Le += mesh.getEmitter()->getRadiance();
+                    Le += mesh.getEmitter()->Le(its.shFrame.n, -_ray.d);
                 } else if (specular) {
-                    Ld += throughput * mesh.getEmitter()->getRadiance();
+                    Ld += throughput *
+                          mesh.getEmitter()->Le(its.shFrame.n, -_ray.d);
                 }
             }
 
+            // emitter sampling
+            // uniformly sample an emiiter
+            const std::vector<Mesh *> &emitters = scene->getEmitters();
+            int emitterIndex = emitterDPDF.sample(sampler->next1D());
+            const Mesh *emitter = emitters[emitterIndex];
+            float pEmitter = 1.f / emitters.size();
+
             if (bsdf.isDiffuse()) {
                 specular = false;
-
-                // sample emitter
-                const std::vector<Mesh *> &emitters = scene->getEmitters();
-                int emitterIndex = emitterDPDF.sample(sampler->next1D());
-                const Mesh *emitter = emitters[emitterIndex];
-                float pEmitter = 1.f / emitters.size();
 
                 // sample a point on the emitter
                 Sample lightSample = emitter->sampleMesh(sampler);
@@ -72,19 +71,20 @@ class PathMis : public Integrator {
                                        ESolidAngle);
 
                 // calculate w_light
-                float pLight = d2 / (emitter->getDiscretePDF().getSum() *
-                                     std::abs(lightSample.n.dot(-_ray.d)));
                 float pBRDF = bsdf.pdf(bsdfQR);
-                float wLight = pLight / (pLight + pBRDF);
+                float pLight = pEmitter * lightSample.pdf,
+                      pLightSolidAngle =
+                          pLight * d2 / std::abs(lightSample.n.dot(lightDir));
+                float wLight = pLightSolidAngle / (pLightSolidAngle + pBRDF);
 
                 if (std::isnan(wLight)) {
-                    wLight = 0;
+                    wLight = 1.f;
                 }
 
                 // calculate geometric term
                 Ray3f shadowRay(its.p, lightDir);
                 shadowRay.maxt = std::sqrt(d2) - Epsilon;
-                float visibility = scene->rayIntersect(shadowRay) ? 0.f : 1.f;
+                int visibility = scene->rayIntersect(shadowRay) ? 0 : 1;
                 Color3f geometric = visibility *
                                     std::abs(its.shFrame.n.dot(lightDir) *
                                              lightSample.n.dot(lightDir)) /
@@ -93,44 +93,42 @@ class PathMis : public Integrator {
                 Color3f fr = bsdf.eval(bsdfQR);
                 Color3f l = emitter->getEmitter()->Le(lightSample.n, -lightDir);
 
-                Ld += wLight * throughput * fr * geometric * l /
-                      (pEmitter * lightSample.pdf);
+                Ld += wLight * throughput * fr * geometric * l / pLight;
             } else {
                 specular = true;
             }
 
+            // bsdf sampling
             // sample reflected direction & update ray
             BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized());
             throughput *= bsdf.sample(bsdfQR, sampler->next2D());
+            // Color3f samplingWeight = bsdf.sample(bsdfQR, sampler->next2D());
             _ray = Ray3f(its.p, its.toWorld(bsdfQR.wo).normalized());
 
-            // next event estimation
             Intersection nextIts;
-
-            if (!scene->rayIntersect(_ray, nextIts)) {
-                break;
-            }
-
-            if (nextIts.mesh->isEmitter()) {
+            if (scene->rayIntersect(_ray, nextIts) &&
+                nextIts.mesh->isEmitter()) {
                 const Mesh &nextMesh = *(nextIts.mesh);
+                Vector3f lightDir = (nextIts.p - its.p).normalized();
+                float d2 = (nextIts.p - its.p).squaredNorm();
 
                 // calculate w_brdf
-                float pBRDF = bsdf.pdf(bsdfQR),
-                      pLight = (nextIts.p - its.p).squaredNorm() /
-                               (nextMesh.getDiscretePDF().getSum() *
-                                std::abs(nextIts.shFrame.n.dot(-_ray.d))),
-                      wBRDF = 1.f;
+                float pBRDF = bsdf.pdf(bsdfQR);
+                float pLight = pEmitter / nextMesh.getSurfaceArea(),
+                      pLightSolidAngle =
+                          pLight * d2 /
+                          std::abs(nextIts.shFrame.n.dot(lightDir));
+                float wBRDF = pBRDF / (pLightSolidAngle + pBRDF);
 
-                if (bsdf.isDiffuse()) {
-                    wBRDF = pBRDF / (pLight + pBRDF);
-
-                    if (std::isnan(wBRDF)) {
-                        wBRDF = 0;
-                    }
+                if (std::isnan(wBRDF)) {
+                    wBRDF = 1.f;
                 }
 
-                Ld += wBRDF * throughput *
-                      nextMesh.getEmitter()->Le(nextIts.shFrame.n, -_ray.d);
+                if (bsdf.isDiffuse()) {
+                    Ld +=
+                        wBRDF * throughput *
+                        nextMesh.getEmitter()->Le(nextIts.shFrame.n, -lightDir);
+                }
             }
 
             // Russian roulette
