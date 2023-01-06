@@ -21,11 +21,8 @@ class PathEms : public Integrator {
     void preprocess(const Scene *scene) {
         const std::vector<Mesh *> &emitters = scene->getEmitters();
 
-        for (std::vector<Mesh *>::const_iterator it = emitters.begin();
-             it < emitters.end(); ++it) {
-            const Mesh *emitter = *it;
-
-            emitterDPDF.append(1.f);
+        for (int i = 0; i < emitters.size(); i++) {
+            emitterDPDF.append(1);
         }
 
         emitterDPDF.normalize();
@@ -77,7 +74,7 @@ class PathEms : public Integrator {
                 // calculate geometric term
                 Ray3f shadowRay(its.p, lightDir);
                 shadowRay.maxt = std::sqrt(d2) - Epsilon;
-                float visibility = scene->rayIntersect(shadowRay) ? 0.f : 1.f;
+                int visibility = scene->rayIntersect(shadowRay) ? 0 : 1;
                 Color3f geometric = visibility *
                                     std::abs(its.shFrame.n.dot(lightDir) *
                                              lightSample.n.dot(lightDir)) /
