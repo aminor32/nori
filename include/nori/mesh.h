@@ -166,6 +166,8 @@ class Mesh : public NoriObject {
 
     const DiscretePDF getDiscretePDF() const { return dpdf; }
 
+    float getSurfaceArea() const { return m_surface; }
+
     /// Register a child object (e.g. a BSDF) with the mesh
     virtual void addChild(NoriObject *child);
 
@@ -198,6 +200,7 @@ class Mesh : public NoriObject {
     Emitter *m_emitter = nullptr;  ///< Associated emitter, if any
     BoundingBox3f m_bbox;          ///< Bounding box of the mesh
     DiscretePDF dpdf;  ///< Discrete probability density function of mesh
+    float m_surface;
 };
 
 NORI_NAMESPACE_END

@@ -48,7 +48,10 @@ void Mesh::activate() {
     dpdf = DiscretePDF(nTriangle);
 
     for (uint32_t f = 0; f < nTriangle; f++) {
-        dpdf.append(surfaceArea(f));
+        float area = surfaceArea(f);
+
+        dpdf.append(area);
+        m_surface += area;
     }
 
     dpdf.normalize();
