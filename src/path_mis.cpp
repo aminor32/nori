@@ -29,10 +29,10 @@ class PathMis : public Integrator {
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
         Intersection its;
-        Color3f Le(0.f), Ld(0.f), tmp(0.f);
+        Color3f Le(0.f), Ld(0.f);
         Color3f throughput(1.f);
         Ray3f _ray(ray);
-        bool specular = false;
+        float wBRDF = 1.f;
 
         for (int depth = 0; depth < MAX_DEPTH; depth++) {
             // terminate: no intersection between scene and ray
@@ -44,12 +44,8 @@ class PathMis : public Integrator {
             const BSDF &bsdf = *(mesh.getBSDF());
 
             if (mesh.isEmitter()) {
-                if (depth == 0) {
-                    Le += mesh.getEmitter()->Le(its.shFrame.n, -_ray.d);
-                } else if (specular) {
-                    Ld += throughput *
-                          mesh.getEmitter()->Le(its.shFrame.n, -_ray.d);
-                }
+                Ld += wBRDF * throughput *
+                      mesh.getEmitter()->Le(its.shFrame.n, -_ray.d);
             }
 
             // emitter sampling
@@ -60,25 +56,25 @@ class PathMis : public Integrator {
             float pEmitter = 1.f / emitters.size();
 
             if (bsdf.isDiffuse()) {
-                specular = false;
-
                 // sample a point on the emitter
                 Sample lightSample = emitter->sampleMesh(sampler);
                 Vector3f lightDir = (lightSample.p - its.p).normalized();
                 float d2 = (lightSample.p - its.p).squaredNorm();
-                BSDFQueryRecord bsdfQR(its.toLocal(lightDir).normalized(),
-                                       its.toLocal(-_ray.d).normalized(),
+                BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized(),
+                                       its.toLocal(lightDir).normalized(),
                                        ESolidAngle);
 
                 // calculate w_light
                 float pBRDF = bsdf.pdf(bsdfQR);
                 float pLight = pEmitter * lightSample.pdf,
                       pLightSolidAngle =
-                          pLight * d2 / std::abs(lightSample.n.dot(lightDir));
+                          lightSample.n.dot(-lightDir) > 0
+                              ? pLight * d2 / lightSample.n.dot(-lightDir)
+                              : 0.f;
                 float wLight = pLightSolidAngle / (pLightSolidAngle + pBRDF);
 
                 if (std::isnan(wLight)) {
-                    wLight = 1.f;
+                    wLight = 0.f;
                 }
 
                 // calculate geometric term
@@ -94,15 +90,12 @@ class PathMis : public Integrator {
                 Color3f l = emitter->getEmitter()->Le(lightSample.n, -lightDir);
 
                 Ld += wLight * throughput * fr * geometric * l / pLight;
-            } else {
-                specular = true;
             }
 
             // bsdf sampling
             // sample reflected direction & update ray
             BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized());
             throughput *= bsdf.sample(bsdfQR, sampler->next2D());
-            // Color3f samplingWeight = bsdf.sample(bsdfQR, sampler->next2D());
             _ray = Ray3f(its.p, its.toWorld(bsdfQR.wo).normalized());
 
             Intersection nextIts;
@@ -116,18 +109,18 @@ class PathMis : public Integrator {
                 float pBRDF = bsdf.pdf(bsdfQR);
                 float pLight = pEmitter / nextMesh.getSurfaceArea(),
                       pLightSolidAngle =
-                          pLight * d2 /
-                          std::abs(nextIts.shFrame.n.dot(lightDir));
-                float wBRDF = pBRDF / (pLightSolidAngle + pBRDF);
-
-                if (std::isnan(wBRDF)) {
-                    wBRDF = 0.f;
-                }
+                          nextIts.shFrame.n.dot(-lightDir) > 0
+                              ? pLight * d2 / nextIts.shFrame.n.dot(-lightDir)
+                              : 0.f;
 
                 if (bsdf.isDiffuse()) {
-                    Ld +=
-                        wBRDF * throughput *
-                        nextMesh.getEmitter()->Le(nextIts.shFrame.n, -lightDir);
+                    wBRDF = pBRDF / (pLightSolidAngle + pBRDF);
+
+                    if (std::isnan(wBRDF)) {
+                        wBRDF = 0.f;
+                    }
+                } else {
+                    wBRDF = 1.0f;
                 }
             }
 
