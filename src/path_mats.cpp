@@ -8,7 +8,7 @@
 #include <cmath>
 #include <vector>
 
-#define MAX_DEPTH 20
+#define MAX_DEPTH 30
 
 NORI_NAMESPACE_BEGIN
 

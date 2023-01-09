@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#define MAX_DEPTH 20
+#define MAX_DEPTH 30
 
 NORI_NAMESPACE_BEGIN
 
@@ -20,7 +20,7 @@ class PathMis : public Integrator {
     void preprocess(const Scene *scene) {
         const std::vector<Mesh *> &emitters = scene->getEmitters();
 
-        for (int i = 0; i < emitters.size(); i++) {
+        for (unsigned long i = 0; i < emitters.size(); i++) {
             emitterDPDF.append(1);
         }
 

@@ -8,7 +8,7 @@
 #include <cmath>
 #include <vector>
 
-#define MAX_DEPTH 20
+#define MAX_DEPTH 30
 
 NORI_NAMESPACE_BEGIN
 
@@ -21,7 +21,7 @@ class PathEms : public Integrator {
     void preprocess(const Scene *scene) {
         const std::vector<Mesh *> &emitters = scene->getEmitters();
 
-        for (int i = 0; i < emitters.size(); i++) {
+        for (unsigned long i = 0; i < emitters.size(); i++) {
             emitterDPDF.append(1);
         }
 
@@ -67,8 +67,8 @@ class PathEms : public Integrator {
             if (bsdf.isDiffuse()) {
                 specular = false;
 
-                BSDFQueryRecord bsdfQR(its.toLocal(lightDir).normalized(),
-                                       its.toLocal(-_ray.d).normalized(),
+                BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized(),
+                                       its.toLocal(lightDir).normalized(),
                                        ESolidAngle);
 
                 // calculate geometric term
