@@ -8,7 +8,7 @@
 #include <cmath>
 #include <vector>
 
-#define MAX_DEPTH 20
+#define MAX_DEPTH 30
 
 NORI_NAMESPACE_BEGIN
 
@@ -21,11 +21,8 @@ class PathEms : public Integrator {
     void preprocess(const Scene *scene) {
         const std::vector<Mesh *> &emitters = scene->getEmitters();
 
-        for (std::vector<Mesh *>::const_iterator it = emitters.begin();
-             it < emitters.end(); ++it) {
-            const Mesh *emitter = *it;
-
-            emitterDPDF.append(emitter->getDiscretePDF().getSum());
+        for (unsigned long i = 0; i < emitters.size(); i++) {
+            emitterDPDF.append(1);
         }
 
         emitterDPDF.normalize();
@@ -33,10 +30,10 @@ class PathEms : public Integrator {
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
         Intersection its;
-        Color3f Le(0.f), Ld(0.f), direct(0.f);
+        Color3f Le(0.f), Ld(0.f);
         Color3f throughput(1.f);
         Ray3f _ray(ray);
-        bool ems = false;
+        bool specular = false;
 
         for (int depth = 0; depth < MAX_DEPTH; depth++) {
             // terminate: no intersection between scene and ray
@@ -49,9 +46,10 @@ class PathEms : public Integrator {
 
             if (mesh.isEmitter()) {
                 if (depth == 0) {
-                    Le += mesh.getEmitter()->getRadiance();
-                } else if (!ems) {
-                    Le += throughput * mesh.getEmitter()->getRadiance();
+                    Le += mesh.getEmitter()->Le(its.shFrame.n, -_ray.d);
+                } else if (specular) {
+                    Ld += throughput *
+                          mesh.getEmitter()->Le(its.shFrame.n, -_ray.d);
                 }
             }
 
@@ -66,17 +64,17 @@ class PathEms : public Integrator {
             Vector3f lightDir = (lightSample.p - its.p).normalized();
             float d2 = (lightSample.p - its.p).squaredNorm();
 
-            ems = false;
-
             if (bsdf.isDiffuse()) {
-                BSDFQueryRecord bsdfQR(its.toLocal(lightDir).normalized(),
-                                       its.toLocal(-_ray.d).normalized(),
+                specular = false;
+
+                BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized(),
+                                       its.toLocal(lightDir).normalized(),
                                        ESolidAngle);
 
                 // calculate geometric term
                 Ray3f shadowRay(its.p, lightDir);
                 shadowRay.maxt = std::sqrt(d2) - Epsilon;
-                float visibility = scene->rayIntersect(shadowRay) ? 0.f : 1.f;
+                int visibility = scene->rayIntersect(shadowRay) ? 0 : 1;
                 Color3f geometric = visibility *
                                     std::abs(its.shFrame.n.dot(lightDir) *
                                              lightSample.n.dot(lightDir)) /
@@ -87,14 +85,19 @@ class PathEms : public Integrator {
 
                 Ld += throughput * fr * geometric * l /
                       (pEmitter * lightSample.pdf);
-
-                ems = true;
+            } else {
+                specular = true;
             }
+
+            // sample reflected direction & update ray
+            BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized());
+            throughput *= bsdf.sample(bsdfQR, sampler->next2D());
+            _ray = Ray3f(its.p, its.toWorld(bsdfQR.wo).normalized());
 
             // Russian roulette
             if (depth > 3) {
-                float probability =
-                    std::min<float>(throughput.maxCoeff(), 0.99);
+                float probability = std::min<float>(
+                    throughput.maxCoeff() * bsdfQR.eta * bsdfQR.eta, 0.99);
                 float zeta = sampler->next1D();
 
                 if (zeta > probability) {
@@ -103,11 +106,6 @@ class PathEms : public Integrator {
                     throughput /= probability;
                 }
             }
-
-            // sample reflected direction & update ray
-            BSDFQueryRecord bsdfQR(its.toLocal(-_ray.d).normalized());
-            throughput *= bsdf.sample(bsdfQR, sampler->next2D());
-            _ray = Ray3f(its.p, its.toWorld(bsdfQR.wo).normalized());
         }
 
         return Le + Ld;

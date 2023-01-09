@@ -8,7 +8,7 @@
 #include <cmath>
 #include <vector>
 
-#define MAX_DEPTH 20
+#define MAX_DEPTH 30
 
 NORI_NAMESPACE_BEGIN
 
@@ -18,18 +18,7 @@ class PathMats : public Integrator {
         // no arguments needed
     }
 
-    void preprocess(const Scene *scene) {
-        const std::vector<Mesh *> &emitters = scene->getEmitters();
-
-        for (std::vector<Mesh *>::const_iterator it = emitters.begin();
-             it < emitters.end(); ++it) {
-            const Mesh *emitter = *it;
-
-            emitterDPDF.append(emitter->getDiscretePDF().getSum());
-        }
-
-        emitterDPDF.normalize();
-    }
+    void preprocess(const Scene *scene) {}
 
     Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
         Intersection its;
@@ -47,7 +36,7 @@ class PathMats : public Integrator {
             const BSDF &bsdf = *(mesh.getBSDF());
 
             if (mesh.isEmitter()) {
-                L += throughput * mesh.getEmitter()->getRadiance();
+                L += throughput * mesh.getEmitter()->Le(its.shFrame.n, -_ray.d);
             }
 
             // sample reflected direction on the material
@@ -59,8 +48,8 @@ class PathMats : public Integrator {
 
             // terminate: Russian roulette
             if (depth > 3) {
-                float probability =
-                    std::min<float>(throughput.maxCoeff(), 0.99);
+                float probability = std::min<float>(
+                    throughput.maxCoeff() * bsdfQR.eta * bsdfQR.eta, 0.99);
                 float zeta = sampler->next1D();
 
                 if (zeta > probability) {
